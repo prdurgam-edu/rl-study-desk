@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RL Study Desk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* Layout: a study desk. Sticky header with progress, tabbed views, one column of item rows that expand in place. */
+  --bg:#f3f4f0; --surface:#ffffff; --ink:#1b211f; --muted:#5d6762; --line:#dde1dc;
+  --accent:#2f47c9; --accent-soft:#e7eafb; --good:#1f7a4d; --warn:#a86200; --bad:#b3261e;
+  --display:"Newsreader",Georgia,serif; --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif; --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --chipL:48%; --chipS:62%; --chipBg:90%; --chipFg:27%;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#121614; --surface:#1a201d; --ink:#e7ebe8; --muted:#9aa49f; --line:#2c3430;
+  --accent:#8fa0ff; --accent-soft:#252c4d; --good:#5cc68f; --warn:#e3a647; --bad:#ff8a80; --chipL:62%; --chipS:38%; --chipBg:24%; --chipFg:80%; color-scheme:dark;}}
+:root[data-theme="dark"]{
+  --bg:#121614; --surface:#1a201d; --ink:#e7ebe8; --muted:#9aa49f; --line:#2c3430;
+  --accent:#8fa0ff; --accent-soft:#252c4d; --good:#5cc68f; --warn:#e3a647; --bad:#ff8a80; --chipL:62%; --chipS:38%; --chipBg:24%; --chipFg:80%; color-scheme:dark;}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--body)}
+a{color:var(--accent)}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:980px;margin:0 auto;padding:0 18px}
+header{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
+.top{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px 28px;padding:16px 0 10px}
+.brand h1{font:600 26px/1.1 var(--display);margin:0;text-wrap:balance}
+.brand p{margin:2px 0 0;color:var(--muted);font-size:13px}
+.stats{display:flex;flex-wrap:wrap;gap:18px;margin-left:auto}
+.stat{min-width:84px}
+.stat b{display:block;font:500 18px/1.2 var(--mono);font-variant-numeric:tabular-nums}
+.stat span{font-size:12px;color:var(--muted)}
+.bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent)}
+nav{display:flex;gap:2px;overflow-x:auto;padding-top:6px}
+nav a{padding:8px 12px;text-decoration:none;color:var(--muted);border-bottom:2px solid transparent;white-space:nowrap;font-weight:500}
+nav a[aria-current="page"]{color:var(--ink);border-color:var(--accent)}
+main{padding:20px 0 60px}
+h2{font:600 22px/1.2 var(--display);margin:0 0 4px;text-wrap:balance}
+h3{font:600 16px/1.3 var(--body);margin:0}
+.sub{color:var(--muted);margin:0 0 16px}
+.row-actions{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 16px}
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);padding:7px 12px;border-radius:6px;cursor:pointer;text-decoration:none;color:var(--ink);font-size:14px}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+:root[data-theme="dark"] .btn.primary{color:#0d1020}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .btn.primary{color:#0d1020}}
+.btn.small{padding:4px 9px;font-size:13px}
+.btn[disabled]{opacity:.5;cursor:default}
+.list{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:8px}
+.item{border-top:1px solid var(--line)}
+.item:first-child{border-top:0}
+.ihead{display:grid;grid-template-columns:minmax(18px,auto) 1fr auto;gap:10px;align-items:center;padding:10px 12px}
+.ihead input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent);margin:0}
+.ititle{min-width:0}
+.ititle .t{font-weight:500;cursor:pointer;overflow-wrap:anywhere}
+.ititle .t:hover{color:var(--accent)}
+.meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;color:var(--muted);margin-top:2px}
+.chip{display:inline-block;padding:1px 7px;border-radius:10px;font-size:11.5px;font-weight:600;color:hsl(var(--h) 60% var(--chipFg));background:hsl(var(--h) var(--chipS) var(--chipBg));}
+.kind{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+.mins{font:12px var(--mono);color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.iacts{display:flex;gap:6px;align-items:center}
+.item.done .t{color:var(--muted);text-decoration:line-through;text-decoration-color:var(--line)}
+.detail{padding:4px 12px 14px 50px;display:flex;flex-direction:column;gap:10px}
+.detail p{margin:0;max-width:68ch}
+.detail ul,.detail ol{margin:0;padding-left:20px;max-width:68ch}
+textarea{width:100%;min-height:70px;border:1px solid var(--line);border-radius:6px;padding:8px;background:var(--bg);resize:vertical}
+input[type=text],input[type=number],input[type=date],select{border:1px solid var(--line);border-radius:6px;padding:6px 8px;background:var(--surface)}
+.player{position:relative;width:100%;max-width:760px;aspect-ratio:16/9;background:#000;border-radius:6px;overflow:hidden}
+.player iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.answer{white-space:pre-wrap;background:var(--bg);border-left:3px solid var(--accent);padding:10px 12px;border-radius:0 6px 6px 0;max-width:72ch}
+.conf{display:flex;flex-wrap:wrap;gap:6px}
+.conf button[aria-pressed="true"]{background:var(--accent);color:#fff;border-color:var(--accent)}
+.q{border:1px solid var(--line);border-radius:6px;padding:10px 12px;background:var(--bg)}
+.q p{margin:0 0 8px;font-weight:500}
+.opts{display:flex;flex-direction:column;gap:6px}
+.opts button{text-align:left;border:1px solid var(--line);background:var(--surface);padding:6px 10px;border-radius:6px;cursor:pointer}
+.opts button.right{border-color:var(--good);background:color-mix(in srgb,var(--good) 14%,var(--surface))}
+.opts button.wrong{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 12%,var(--surface))}
+.why{font-size:13px;color:var(--muted);margin-top:6px}
+.section{margin:26px 0 10px;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.section h3{font:600 17px/1.2 var(--display)}
+.section span{color:var(--muted);font-size:13px}
+.empty{padding:16px;color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:8px;text-decoration:none;color:var(--ink);border-top:4px solid hsl(var(--h) 55% var(--chipL))}
+.card:hover{border-color:var(--accent)}
+.card .small{font-size:13px;color:var(--muted)}
+.week{margin-bottom:10px}
+.whead{display:flex;gap:10px;align-items:center;padding:10px 12px;background:var(--surface);border:1px solid var(--line);border-radius:8px;cursor:pointer;width:100%;text-align:left}
+.whead .w1{flex:1;min-width:0}
+.whead .w1 b{display:block}
+.whead .w1 span{font-size:12.5px;color:var(--muted)}
+.week.open .whead{border-radius:8px 8px 0 0;border-bottom-color:transparent}
+.week.open .list{border-radius:0 0 8px 8px}
+.day{padding:8px 12px 4px;font:500 12.5px var(--mono);color:var(--muted);background:var(--bg);border-top:1px solid var(--line);display:flex;justify-content:space-between}
+.day.today{color:var(--accent)}
+.pill{font:500 11px var(--mono);padding:2px 7px;border-radius:10px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.pill.good{color:var(--good);border-color:currentColor}
+.pill.warn{color:var(--warn);border-color:currentColor}
+.form{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px}
+.form label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
+.form .full{grid-column:1/-1}
+.days{display:flex;flex-wrap:wrap;gap:8px}
+.days label{flex-direction:row;align-items:center;gap:4px;color:var(--ink)}
+.note{font-size:13px;color:var(--muted);max-width:72ch}
+.sync{font-size:12px;color:var(--muted)}
+.notice{background:var(--accent-soft);border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:14px}
+@media (max-width:560px){.detail{padding-left:12px}.stats{margin-left:0}.top{align-items:flex-start}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="top">
+      <div class="brand"><h1>RL Study Desk</h1><p id="trackline">11 NPTEL courses, one plan</p></div>
+      <div class="stats">
+        <div class="stat"><b id="s-pct">0%</b><span>complete</span></div>
+        <div class="stat"><b id="s-hrs">0 / 0</b><span>hours done</span></div>
+        <div class="stat"><b id="s-end">—</b><span>projected finish</span></div>
+        <div class="stat"><b id="s-streak">0</b><span>day streak</span></div>
+      </div>
+    </div>
+    <div class="bar" aria-hidden="true"><i id="s-bar" style="width:0"></i></div>
+    <nav id="nav">
+      <a href="#today">Today</a><a href="#plan">Plan</a><a href="#courses">Courses</a><a href="#projects">Projects</a><a href="#review">Review</a><a href="#setup">Setup</a>
+    </nav>
+  </div>
+</header>
+<main class="wrap" id="view"><p class="empty">Loading your curriculum…</p></main>
+
+<script>
+"use strict";
+/* ---------- helpers ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const pad = n => String(n).padStart(2,"0");
+const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const parse = s => { const [y,m,d] = s.split("-").map(Number); return new Date(y, m-1, d); };
+const addDays = (s,n) => { const d = parse(s); d.setDate(d.getDate()+n); return ymd(d); };
+const dow = s => parse(s).getDay();
+const today = () => ymd(new Date());
+const fmtDay = s => parse(s).toLocaleDateString(undefined,{weekday:"short", day:"numeric", month:"short"});
+const fmtDate = s => parse(s).toLocaleDateString(undefined,{day:"numeric", month:"short", year:"numeric"});
+const hm = m => m >= 60 ? `${Math.floor(m/60)}h${m%60 ? " "+(m%60)+"m" : ""}` : `${m}m`;
+const yt = id => `https://www.youtube.com/watch?v=${id}`;
+const KIND = {lec:"Lecture", read:"Reading", assign:"Assignment", task:"Practice", test:"Self-test", final:"Final exam", proj:"Project", ext:"Deep RL", habit:"Habit"};
+
+/* ---------- state ---------- */
+const LS_KEY = "rlstudy.v1";
+const defaults = () => ({v:1, updated:0, settings:{start:today(), wd:90, we:180, pace:1.25, rest:[], track:"full"}, done:{}, tests:{}, reviews:{}});
+let S = defaults(), NOTES = {updated:0, n:{}};
+let C = null, SEQ = [], BYID = {}, PLAN = null;
+let open = new Set();       // expanded item ids
+let openWeeks = new Set();  // expanded plan weeks
+let syncMsg = "Saved in this browser only", EMBED = false;
+try { const raw = localStorage.getItem(LS_KEY); if (raw) { const o = JSON.parse(raw); if (o.s) S = Object.assign(defaults(), o.s); if (o.n) NOTES = o.n; } } catch(e) {}
+S.settings = Object.assign(defaults().settings, S.settings || {});
+
+/* ---------- sequence ---------- */
+function lecMin(c){ return Math.round(c.est * S.settings.pace); }
+function buildSeq(){
+  const track = S.settings.track, phases = track === "core" ? C.phases_core : C.phases_full;
+  const inTrack = new Set(phases.flatMap(p => p[1]));
+  const seq = [];
+  const projs = C.projects.filter(p => (track === "full" || p.core) && (p.anchor === "start" || inTrack.has(p.anchor[0])));
+  const pushProj = p => { for (let k = 1; k <= p.hours; k++) seq.push({id:`${p.id}-s${k}`, kind:"proj", p, k, title:`${p.title}`, min:60, phase:cur}); };
+  let cur = "Getting started";
+  projs.filter(p => p.anchor === "start").forEach(pushProj);
+  for (const [pname, codes] of phases){
+    cur = pname;
+    const maxW = Math.max(...codes.map(k => C.courses[k].weeks.length));
+    for (let w = 1; w <= maxW; w++){
+      for (const k of codes){
+        const c = C.courses[k], wk = c.weeks[w-1];
+        if (!wk) continue;
+        const base = {c:k, w, phase:pname};
+        wk.lectures.forEach((l,i) => seq.push({...base, id:`${k}-w${w}-l${i+1}`, kind:"lec", title:l[0], yt:l[1], min:lecMin(c)}));
+        if (wk.reading) seq.push({...base, id:`${k}-w${w}-r`, kind:"read", title:`${wk.reading.ref}`, min:40});
+        if (wk.assign.length) seq.push({...base, id:`${k}-w${w}-a`, kind:"assign", title:`Week ${w} assignment`, min:60});
+        else if (wk.task) seq.push({...base, id:`${k}-w${w}-t`, kind:"task", title:`Week ${w} practice task`, min:75});
+        seq.push({...base, id:`${k}-w${w}-q`, kind:"test", title:`Self-test: week ${w}`, min:20});
+        projs.filter(p => p.anchor !== "start" && p.anchor[0] === k && p.anchor[1] === w).forEach(pushProj);
+        if (w === c.weeks.length) seq.push({c:k, w, phase:pname, id:`${k}-final`, kind:"final", title:`Final self-exam: ${c.name}`, min:120});
+      }
+    }
+  }
+  cur = "Modern deep RL & capstone";
+  for (const x of C.phase7.filter(x => track === "full" || x.core)){
+    if (x.kind === "project") pushProj({...x, hours:x.size});
+    else { const n = Math.ceil(x.size/60); for (let k = 1; k <= n; k++) seq.push({id:`${x.id}-s${k}`, kind:"ext", x, k, n, title:x.title, min:60, phase:cur}); }
+  }
+  SEQ = seq; BYID = {}; seq.forEach(it => BYID[it.id] = it);
+}
+const totalMin = () => SEQ.reduce((a,it) => a + it.min, 0);
+const doneMin = () => SEQ.reduce((a,it) => a + (S.done[it.id] ? it.min : 0), 0);
+
+/* ---------- habits ---------- */
+function habitsFor(date){
+  if (dow(date) !== 0) return [];
+  const n = Math.floor((parse(date) - parse(S.settings.start)) / 864e5 / 7);
+  const h = [{id:`H-rev-${date}`, kind:"habit", title:"Weekly review: reread this week's notes, update your cheat sheet, push code to GitHub", min:30}];
+  if (n % 4 === 3) h.push({id:`H-post-${date}`, kind:"habit", title:"Monthly write-up: publish a short post explaining one concept you learned", min:45});
+  return h;
+}
+function habitById(id){ const m = id.match(/^H-(rev|post)-(\d{4}-\d\d-\d\d)$/); if (!m) return null; return habitsFor(m[2]).find(h => h.id === id) || {id, kind:"habit", title: m[1]==="rev" ? "Weekly review" : "Monthly write-up", min:30}; }
+const getItem = id => BYID[id] || habitById(id);
+
+/* ---------- scheduler ---------- */
+function capFor(date){ const s = S.settings; if (s.rest.includes(dow(date))) return 0; const d = dow(date); return (d === 0 || d === 6) ? s.we : s.wd; }
+function schedule(){
+  const t = today(), s = S.settings;
+  const days = new Map();
+  const ensure = d => { if (!days.has(d)) days.set(d, []); return days.get(d); };
+  // past and today's completed items
+  for (const [id, d] of Object.entries(S.done)){ const it = getItem(id); if (it && (BYID[id] || id.startsWith("H-"))) ensure(d).push(it); }
+  const remaining = SEQ.filter(it => !S.done[it.id]);
+  let day = s.start > t ? s.start : t, i = 0, guard = 0;
+  while (i < remaining.length && guard++ < 4000){
+    let cap = capFor(day);
+    if (day === t) cap -= (days.get(t) || []).reduce((a,it) => a + it.min, 0);
+    const list = ensure(day);
+    if (capFor(day) > 0) for (const h of habitsFor(day)) if (!S.done[h.id]) { list.push(h); cap -= h.min; }
+    let used = 0;
+    while (i < remaining.length && cap > 0){
+      const it = remaining[i];
+      if (it.min <= cap - used + 15 || used === 0) { list.push(it); used += it.min; i++; }
+      else break;
+      if (used >= cap) break;
+    }
+    day = addDays(day, 1);
+  }
+  const keys = [...days.keys()].filter(d => days.get(d).length).sort();
+  const pos = {}; keys.forEach(d => days.get(d).forEach(it => { if (!S.done[it.id]) pos[it.id] = d; }));
+  PLAN = {days, keys, pos, end: keys.length ? keys[keys.length-1] : t};
+}
+
+/* ---------- persistence ---------- */
+let db = null, uid = null, progRef = null, notesRef = null, saveTimer = null, writing = Promise.resolve(), sample = null, dirtyS = false, dirtyN = false;
+function saveLocal(){ try { localStorage.setItem(LS_KEY, JSON.stringify({s:S, n:NOTES})); } catch(e) {} }
+function save(what = "s"){
+  if (what === "s") { S.updated = Date.now(); dirtyS = true; } else { NOTES.updated = Date.now(); dirtyN = true; }
+  saveLocal();
+  if (!db || !uid) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    const ps = dirtyS ? JSON.parse(JSON.stringify(S)) : null, ns = dirtyN ? JSON.parse(JSON.stringify(NOTES)) : null; dirtyS = dirtyN = false;
+    writing = writing.then(() => ps && progRef.set(ps)).then(() => ns && notesRef.set(ns)).then(() => setSync("Synced to your Claude account")).catch(e => setSync(e && e.code === "quota_exceeded" ? "Sync storage is full; progress is saved in this browser" : "Sync failed; progress is saved in this browser"));
+  }, 1200);
+}
+function setSync(m){ syncMsg = m; const el = $("#syncmsg"); if (el) el.textContent = m; }
+async function connect(){
+  try {
+    for (let k = 0; k < 30 && !(window.claude && window.claude.use); k++) await new Promise(r => setTimeout(r, 100));
+    if (!window.claude || !window.claude.use) { EMBED = true; setSync("Saved in this browser only. Use Copy progress backup to move your progress to another device."); render(); return; }
+    claude.use("sample").then(s => { sample = s; if (s) render(); }).catch(() => {});
+    db = await claude.use("db"); const user = await claude.use("user");
+    uid = user ? await user.id() : null;
+    if (!db || !uid) { db = null; return; }
+    progRef = db.doc(`data/users/${uid}/progress`); notesRef = db.doc(`data/users/${uid}/notes`);
+    const timer = setTimeout(() => setSync("Can't reach sync yet; progress is saved in this browser"), 10000);
+    const [p, n] = await Promise.all([progRef.get(), notesRef.get()]);
+    clearTimeout(timer);
+    let changed = false;
+    if (p.exists && (p.data().updated || 0) > (S.updated || 0)) { S = Object.assign(defaults(), JSON.parse(JSON.stringify(p.data()))); S.settings = Object.assign(defaults().settings, S.settings); changed = true; }
+    if (n.exists && (n.data().updated || 0) > (NOTES.updated || 0)) { NOTES = JSON.parse(JSON.stringify(n.data())); changed = true; }
+    if ((!p.exists && S.updated) || (p.exists && (p.data().updated||0) < S.updated)) save("s");
+    if (!n.exists && NOTES.updated) save("n");
+    setSync("Synced to your Claude account");
+    if (changed) { saveLocal(); refresh(); }
+    progRef.onSnapshot(snap => {
+      if (!snap.exists || snap.metadata.hasPendingWrites) return;
+      const d = snap.data(); if ((d.updated||0) > S.updated) { S = Object.assign(defaults(), JSON.parse(JSON.stringify(d))); S.settings = Object.assign(defaults().settings, S.settings); saveLocal(); refresh(); }
+    }, () => setSync("Live sync stopped; reload to reconnect"));
+  } catch(e) { db = null; setSync("Saved in this browser only"); }
+}
+
+/* ---------- actions ---------- */
+function toggleDone(id, on){
+  if (on) S.done[id] = today(); else delete S.done[id];
+  save(); refresh();
+}
+function rateTest(id, conf){
+  const t = S.tests[id] = Object.assign(S.tests[id] || {}, {conf, date:today()});
+  S.done[id] = S.done[id] || today();
+  scheduleReview(id, conf >= 4 && !(t.quiz && t.quiz.score/t.quiz.n < .7));
+  save(); refresh();
+}
+function scheduleReview(id, good){
+  const r = S.reviews[id] || {step:-1};
+  if (!good) { S.reviews[id] = {step:0, due:addDays(today(), 2)}; return; }
+  if (r.step < 0) { delete S.reviews[id]; return; }
+  const gaps = [7, 21];
+  if (r.step >= gaps.length) { delete S.reviews[id]; return; }
+  S.reviews[id] = {step:r.step+1, due:addDays(today(), gaps[r.step])};
+}
+function reviewRate(id, conf){ scheduleReview(id, conf >= 4); S.tests[id] = Object.assign(S.tests[id] || {}, {conf, date:today()}); save(); refresh(); }
+
+/* ---------- rendering ---------- */
+function chip(code){ const c = C.courses[code]; return c ? `<span class="chip" style="--h:${c.hue}">${esc(code)}</span>` : ""; }
+function itemMeta(it){
+  const parts = [];
+  if (it.c) parts.push(chip(it.c));
+  parts.push(`<span class="kind">${KIND[it.kind]}</span>`);
+  if (it.c && it.w && it.kind !== "final") parts.push(`<span>${esc(C.courses[it.c].name)} · week ${it.w}</span>`);
+  if (it.kind === "proj") parts.push(`<span>session ${it.k} of ${it.p.hours}</span>`);
+  if (it.kind === "ext") parts.push(`<span>session ${it.k} of ${it.n}</span>`);
+  return parts.join("");
+}
+function itemRow(it, opts = {}){
+  const done = !!S.done[it.id], isOpen = open.has(it.id);
+  const watch = it.kind !== "lec" ? "" : EMBED ? `<button class="btn small" data-act="open">${isOpen ? "Close" : "Play"}</button>` : `<a class="btn small" href="${yt(it.yt)}" target="_blank" rel="noopener">Watch ↗</a>`;
+  const when = opts.showDate && PLAN.pos[it.id] ? `<span class="pill">${fmtDay(PLAN.pos[it.id])}</span>` : "";
+  return `<div class="item${done ? " done" : ""}" data-id="${esc(it.id)}">
+    <div class="ihead">
+      <input type="checkbox" aria-label="Mark done: ${esc(it.title)}" data-act="done" ${done ? "checked" : ""}>
+      <div class="ititle"><div class="t" data-act="open" role="button" tabindex="0" aria-expanded="${isOpen}">${esc(it.title)}</div><div class="meta">${itemMeta(it)}</div></div>
+      <div class="iacts">${when}${watch}<span class="mins">${hm(it.min)}</span></div>
+    </div>
+    ${isOpen ? `<div class="detail">${detail(it)}</div>` : ""}
+  </div>`;
+}
+function weekLectures(code, w){ return C.courses[code].weeks[w-1].lectures.map(l => l[0]); }
+function claudeBox(it, mode){
+  if (!sample) return "";
+  if (mode === "ask") return `<div><label class="note" for="ask-${esc(it.id)}">Ask Claude about this ${it.kind === "lec" ? "lecture" : "item"}</label>
+    <textarea id="ask-${esc(it.id)}" placeholder="e.g. Why does the Bellman operator being a contraction guarantee a unique fixed point?"></textarea>
+    <div class="row-actions" style="margin:6px 0 0"><button class="btn small" data-act="ask">Ask</button></div><div class="answer" data-out="ask" hidden></div></div>`;
+  return `<div class="row-actions" style="margin:0"><button class="btn small primary" data-act="quiz">${mode === "final" ? "Generate a 10-question mock exam with Claude" : "Quiz me with Claude (5 questions)"}</button></div><div data-out="quiz"></div>`;
+}
+function detail(it){
+  const note = `<div><label class="note" for="note-${esc(it.id)}">Your notes</label><textarea id="note-${esc(it.id)}" data-act="note" placeholder="Key idea, equations, open questions…">${esc(NOTES.n[it.id] || "")}</textarea></div>`;
+  const c = it.c ? C.courses[it.c] : null, wk = c && it.w ? c.weeks[it.w-1] : null;
+  switch (it.kind){
+    case "lec": return `${EMBED ? `<div class="player"><iframe src="https://www.youtube-nocookie.com/embed/${esc(it.yt)}?rel=0" title="${esc(it.title)}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div>` : ""}<p>${esc(c.title)} · ${esc(c.prof)}, ${esc(c.inst)}${wk.topic ? ` · <i>${esc(wk.topic)}</i>` : ""}</p>
+      <div class="row-actions" style="margin:0"><a class="btn small" href="${yt(it.yt)}" target="_blank" rel="noopener">Open on YouTube ↗</a><a class="btn small" href="${c.url}" target="_blank" rel="noopener">Course page on NPTEL ↗</a></div>${note}${claudeBox(it,"ask")}`;
+    case "read": return `<p>Read <b>${esc(wk.reading.ref)}</b> in <a href="${wk.reading.url}" target="_blank" rel="noopener">${esc(wk.reading.book)}</a>. Skim first, then work through one derivation by hand.</p>${note}`;
+    case "assign": return `<p>Attempt every question before checking anything. Time-box it to an hour; note what you got wrong.</p><ul>${wk.assign.map(a => `<li><a href="${esc(a[1])}" target="_blank" rel="noopener">${esc(a[0])} ↗</a></li>`).join("")}</ul>${c.resources.map(r => `<p class="note">Also available: <a href="${esc(r[1])}" target="_blank" rel="noopener">${esc(r[0])}</a></p>`).join("")}${note}`;
+    case "task": return `<p>${esc(wk.task)}</p><p class="note">Commit the notebook to your repo under <code>${esc(it.c.toLowerCase())}/week${pad(it.w)}</code>.</p>${note}${claudeBox(it,"ask")}`;
+    case "test": {
+      const t = S.tests[it.id] || {};
+      return `<p>Close your notes. For each lecture below, say or write the core idea in 2–3 sentences, then rate yourself.</p>
+        <ol>${weekLectures(it.c, it.w).map(l => `<li>${esc(l)}</li>`).join("")}</ol>
+        <div class="conf" role="group" aria-label="Confidence">${["Lost","Shaky","Okay","Solid","Could teach it"].map((l,i) => `<button class="btn small" data-act="rate" data-v="${i+1}" aria-pressed="${t.conf === i+1}">${i+1} · ${l}</button>`).join("")}</div>
+        ${t.quiz ? `<p class="note">Last Claude quiz: ${t.quiz.score}/${t.quiz.n} on ${fmtDate(t.quiz.date)}</p>` : ""}
+        <p class="note">Ratings of 3 or below, or a quiz score under 70%, put this week in your review queue (back in 2, then 7, then 21 days).</p>${claudeBox(it,"quiz")}`;
+    }
+    case "final": return `<p>Two hours, closed book. Write full answers on paper, then check them against the lectures.</p><ol>${c.finals.map(q => `<li>${esc(q)}</li>`).join("")}</ol>${claudeBox(it,"final")}${note}`;
+    case "proj": return `<p>${esc(it.p.desc)}</p><p><b>Deliverable:</b> ${esc(it.p.deliverable || "")}</p>${it.p.url ? `<p><a href="${esc(it.p.url)}" target="_blank" rel="noopener">Reference ↗</a></p>` : ""}<p class="note">This project is split into ${it.p.hours} one-hour sessions. Tick a session off when you've put in the hour.</p>${note}`;
+    case "ext": return `<p>${esc(it.x.desc)}</p><p><a href="${esc(it.x.url)}" target="_blank" rel="noopener">Open resource ↗</a></p>${note}`;
+    case "habit": return `<p>${esc(it.title)}.</p>${note}`;
+  }
+  return note;
+}
+function list(items, opts){ return items.length ? `<div class="list">${items.map(it => itemRow(it, opts)).join("")}</div>` : `<div class="list"><div class="empty">${opts && opts.empty || "Nothing here."}</div></div>`; }
+
+function viewToday(){
+  const t = today(), items = PLAN.days.get(t) || [];
+  const planned = items.reduce((a,it) => a + it.min, 0), done = items.filter(it => S.done[it.id]).reduce((a,it) => a + it.min, 0);
+  const lecIds = items.filter(it => it.kind === "lec" && !S.done[it.id]).map(it => it.yt).slice(0,50);
+  const due = Object.entries(S.reviews).filter(([,r]) => r.due <= t).map(([id]) => BYID[id]).filter(Boolean);
+  const next = SEQ.filter(it => !S.done[it.id] && !items.includes(it)).slice(0, 5);
+  const startNote = S.settings.start > t ? `<div class="notice">Your plan starts on ${fmtDate(S.settings.start)}. Change the start date in Setup.</div>` : "";
+  return `${startNote}<h2>${parse(t).toLocaleDateString(undefined,{weekday:"long", day:"numeric", month:"long"})}</h2>
+    <p class="sub">${hm(planned)} planned · ${hm(done)} done${capFor(t) === 0 ? " · rest day" : ""}</p>
+    <div class="row-actions">${lecIds.length ? `<a class="btn primary" href="https://www.youtube.com/watch_videos?video_ids=${lecIds.join(",")}" target="_blank" rel="noopener">Play today's ${lecIds.length} lecture${lecIds.length > 1 ? "s" : ""} as one YouTube playlist ↗</a>` : ""}</div>
+    ${list(items, {empty: capFor(t) === 0 ? "Rest day. Nothing scheduled." : "All caught up. Start something from Next up if you have time."})}
+    ${due.length ? `<div class="section"><h3>Due for review</h3><span>Redo these self-tests from memory, then rate again</span></div><div class="list">${due.map(reviewRow).join("")}</div>` : ""}
+    <div class="section"><h3>Next up</h3><span>If you finish early</span></div>${list(next, {showDate:true})}`;
+}
+function reviewRow(it){
+  const r = S.reviews[it.id];
+  return `<div class="item" data-id="${esc(it.id)}"><div class="ihead"><span></span><div class="ititle"><div class="t">${esc(C.courses[it.c].name)}, week ${it.w}</div><div class="meta">${chip(it.c)}<span>${weekLectures(it.c,it.w).slice(0,4).map(esc).join(" · ")}${weekLectures(it.c,it.w).length > 4 ? " …" : ""}</span></div></div><div class="iacts"><span class="pill ${r.due <= today() ? "warn" : ""}">due ${fmtDay(r.due)}</span></div></div>
+    <div class="detail"><div class="conf">${[1,2,3,4,5].map(v => `<button class="btn small" data-act="rrate" data-v="${v}">${v}</button>`).join("")}</div></div></div>`;
+}
+function weekKey(d){ const x = parse(d); const off = (x.getDay() + 6) % 7; x.setDate(x.getDate() - off); return ymd(x); }
+function viewPlan(){
+  const t = today(), weeks = new Map();
+  for (const d of PLAN.keys) { const k = weekKey(d); if (!weeks.has(k)) weeks.set(k, []); weeks.get(k).push(d); }
+  const cw = weekKey(t);
+  if (![...openWeeks].some(k => /^\d{4}-/.test(k))) { openWeeks.add(cw); openWeeks.add(addDays(cw, 7)); }
+  let n = 0, html = `<h2>Day-by-day plan</h2><p class="sub">${PLAN.keys.length} study days · finishing around ${fmtDate(PLAN.end)}. Unfinished work rolls forward automatically, so the plan always starts from today.</p>`;
+  for (const [wk, ds] of weeks){
+    n++;
+    const items = ds.flatMap(d => PLAN.days.get(d));
+    const mins = items.reduce((a,it) => a + it.min, 0), dn = items.filter(it => S.done[it.id]).length;
+    const codes = [...new Set(items.map(it => it.c).filter(Boolean))];
+    const phase = [...new Set(items.map(it => it.phase).filter(Boolean))].join(" → ");
+    const isOpen = openWeeks.has(wk);
+    const status = wk < cw ? `<span class="pill good">${dn}/${items.length} done</span>` : wk === cw ? `<span class="pill warn">this week</span>` : `<span class="pill">${hm(mins)}</span>`;
+    html += `<div class="week${isOpen ? " open" : ""}"><button class="whead" data-week="${wk}" aria-expanded="${isOpen}"><div class="w1"><b>Week ${n} · ${fmtDate(wk)}</b><span>${esc(phase)}</span></div>${codes.map(chip).join(" ")}${status}</button>`;
+    if (isOpen) html += `<div class="list">${ds.map(d => `<div class="day${d === t ? " today" : ""}"><span>${fmtDay(d)}${d === t ? " · today" : ""}</span><span>${hm(PLAN.days.get(d).reduce((a,it) => a + it.min, 0))}</span></div>${PLAN.days.get(d).map(it => itemRow(it)).join("")}`).join("")}</div>`;
+    html += `</div>`;
+  }
+  return html;
+}
+function courseStats(code){
+  const its = SEQ.filter(it => it.c === code), tot = its.reduce((a,it) => a + it.min, 0), dn = its.reduce((a,it) => a + (S.done[it.id] ? it.min : 0), 0);
+  return {tot, dn, pct: tot ? Math.round(dn/tot*100) : 0, lec: its.filter(it => it.kind === "lec").length};
+}
+function viewCourses(){
+  const phases = S.settings.track === "core" ? C.phases_core : C.phases_full;
+  return `<h2>Courses</h2><p class="sub">In study order. Courses in the same phase run side by side, alternating week by week.</p>` + phases.map(([pn, codes], i) => `
+    <div class="section"><h3>Phase ${i+1}: ${esc(pn)}</h3></div><div class="grid">${codes.map(k => { const c = C.courses[k], s = courseStats(k); return `
+      <a class="card" href="#course-${k}" style="--h:${c.hue}"><div class="meta">${chip(k)}<span>${esc(c.inst)}</span></div><h3>${esc(c.title)}</h3><div class="small">${esc(c.prof)} · ${c.weeks.length} weeks · ${s.lec} lectures</div><div class="bar"><i style="width:${s.pct}%"></i></div><div class="small">${s.pct}% · ${hm(s.dn)} of ${hm(s.tot)}</div></a>`; }).join("")}</div>`).join("")
+    + `<div class="section"><h3>Phase ${phases.length+1}: Modern deep RL & capstone</h3><span>Not on NPTEL: PPO, SAC, model-based RL, RLHF. See Projects.</span></div>`;
+}
+function viewCourse(code){
+  const c = C.courses[code]; if (!c) return viewCourses();
+  const s = courseStats(code);
+  return `<p><a href="#courses">← All courses</a></p><div class="meta">${chip(code)}<span>${esc(c.inst)}</span></div><h2>${esc(c.title)}</h2>
+    <p class="sub">${esc(c.prof)} · ${s.pct}% done · ${hm(s.tot - s.dn)} left · <a href="${c.url}" target="_blank" rel="noopener">NPTEL page ↗</a></p>
+    ${c.weeks.map(wk => { const its = SEQ.filter(it => it.c === code && it.w === wk.n && it.kind !== "final"); const dn = its.filter(it => S.done[it.id]).length; const key = `${code}-${wk.n}`, isOpen = openWeeks.has(key);
+      return `<div class="week${isOpen ? " open" : ""}"><button class="whead" data-week="${key}" aria-expanded="${isOpen}"><div class="w1"><b>Week ${wk.n}</b><span>${esc(wk.topic || wk.lectures.slice(0,3).map(l => l[0]).join(" · "))}</span></div><span class="pill ${dn === its.length ? "good" : ""}">${dn}/${its.length}</span></button>${isOpen ? list(its, {showDate:true}) : ""}</div>`; }).join("")}
+    <div class="section"><h3>Final</h3></div>${list(SEQ.filter(it => it.id === `${code}-final`), {showDate:true})}`;
+}
+function viewProjects(){
+  const groups = new Map();
+  SEQ.filter(it => it.kind === "proj" || it.kind === "ext").forEach(it => { const key = it.kind === "proj" ? it.p.id : it.x.id; if (!groups.has(key)) groups.set(key, []); groups.get(key).push(it); });
+  return `<h2>Projects and deep-RL extension</h2><p class="sub">Hands-on work that turns lectures into skill. Each is split into one-hour sessions and scheduled right after the lectures it depends on.</p><div class="list">` +
+    [...groups.values()].map(its => { const f = its[0], o = f.p || f.x, dn = its.filter(it => S.done[it.id]).length, anchor = f.p && f.p.anchor && f.p.anchor !== "start" && f.p.anchor !== "phase7" ? `after ${C.courses[f.p.anchor[0]].name} week ${f.p.anchor[1]}` : f.phase;
+      return `<div class="item"><div class="ihead"><span class="pill ${dn === its.length ? "good" : ""}" style="justify-self:start">${dn}/${its.length}</span><div class="ititle"><div class="t" data-act="popen" data-id="${esc(f.id)}">${esc(o.title)}</div><div class="meta"><span class="kind">${f.kind === "proj" ? "Project" : "Deep RL"}</span><span>${esc(anchor)}</span>${PLAN.pos[(its.find(it => !S.done[it.id]) || {}).id] ? `<span>· next session ${fmtDay(PLAN.pos[its.find(it => !S.done[it.id]).id])}</span>` : ""}</div></div><span class="mins">${hm(its.length*60)}</span></div>
+        ${open.has("P:"+f.id) ? `<div class="detail"><p>${esc(o.desc)}</p>${o.deliverable ? `<p><b>Deliverable:</b> ${esc(o.deliverable)}</p>` : ""}${o.url ? `<p><a href="${esc(o.url)}" target="_blank" rel="noopener">Reference ↗</a></p>` : ""}</div>${list(its)}` : ""}</div>`; }).join("") + `</div>`;
+}
+function viewReview(){
+  const t = today(), all = Object.entries(S.reviews).sort((a,b) => a[1].due < b[1].due ? -1 : 1).map(([id]) => BYID[id]).filter(Boolean);
+  const tested = Object.entries(S.tests).filter(([id]) => BYID[id]).sort((a,b) => (a[1].date < b[1].date ? 1 : -1)).slice(0, 30);
+  return `<h2>Review</h2><p class="sub">Spaced repetition for weeks you rated 3 or lower. Rate 4 or 5 to push a week further out; rate lower to bring it back in 2 days.</p>
+    ${all.length ? `<div class="list">${all.map(reviewRow).join("")}</div>` : `<div class="list"><div class="empty">Nothing queued. Self-tests you rate 3 or lower will show up here.</div></div>`}
+    <div class="section"><h3>Recent self-tests</h3></div>
+    ${tested.length ? `<div class="list">${tested.map(([id, r]) => { const it = BYID[id]; return `<div class="item"><div class="ihead"><span></span><div class="ititle"><div>${esc(C.courses[it.c].name)}, week ${it.w}</div><div class="meta">${chip(it.c)}<span>${fmtDate(r.date)}</span></div></div><div class="iacts">${r.conf ? `<span class="pill ${r.conf >= 4 ? "good" : "warn"}">confidence ${r.conf}/5</span>` : ""}${r.quiz ? `<span class="pill">quiz ${r.quiz.score}/${r.quiz.n}</span>` : ""}</div></div></div>`; }).join("")}</div>` : `<div class="list"><div class="empty">No self-tests yet.</div></div>`}`;
+}
+function viewSetup(){
+  const s = S.settings, D = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  return `<h2>Setup</h2><p class="sub">Change these any time; the plan recalculates instantly and keeps everything you've completed.</p>
+  <form class="form" id="setup" onsubmit="return false">
+    <label for="f-start">Start date<input type="date" id="f-start" value="${s.start}"></label>
+    <label for="f-wd">Minutes per weekday<input type="number" id="f-wd" min="0" step="15" value="${s.wd}"></label>
+    <label for="f-we">Minutes per weekend day<input type="number" id="f-we" min="0" step="15" value="${s.we}"></label>
+    <label for="f-pace">Time per lecture minute (note-taking pace)<select id="f-pace">${[[1,"1.0× (just watching)"],[1.25,"1.25× (pausing for notes)"],[1.5,"1.5× (working every example)"]].map(([v,l]) => `<option value="${v}" ${s.pace == v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+    <label for="f-track" class="full">Track<select id="f-track"><option value="full" ${s.track === "full" ? "selected" : ""}>Full: all 11 courses, 20 projects, deep-RL extension</option><option value="core" ${s.track === "core" ? "selected" : ""}>Core: Probability, Intro ML, Deep Learning, RL, Bandits + core projects</option></select></label>
+    <fieldset class="full" style="border:0;padding:0;margin:0"><legend class="note">Rest days</legend><div class="days">${D.map((d,i) => `<label><input type="checkbox" data-rest="${i}" ${s.rest.includes(i) ? "checked" : ""}> ${d}</label>`).join("")}</div></fieldset>
+  </form>
+  <p class="note" style="margin-top:12px">Lecture lengths are estimates per course (NPTEL doesn't publish durations): ${Object.values(C.courses).map(c => `${c.code} ~${c.est} min`).join(", ")}. Total for this track: ${hm(totalMin())}.</p>
+  <div class="section"><h3>Your progress data</h3><span class="sync" id="syncmsg">${esc(syncMsg)}</span></div>
+  <div class="row-actions"><button class="btn" data-act="export">Copy progress backup</button><button class="btn" data-act="importshow">Restore from backup</button></div>
+  <div id="importbox" hidden><textarea id="importtext" placeholder="Paste a backup here"></textarea><div class="row-actions" style="margin-top:6px"><button class="btn primary" data-act="import">Restore</button><span class="note" id="importmsg"></span></div></div>`;
+}
+
+function render(){
+  const h = (location.hash || "#today").slice(1);
+  const route = h.startsWith("course-") ? "courses" : h;
+  document.querySelectorAll("#nav a").forEach(a => a.setAttribute("aria-current", a.getAttribute("href") === "#"+route ? "page" : "false"));
+  const v = $("#view");
+  v.innerHTML = h === "plan" ? viewPlan() : h === "courses" ? viewCourses() : h.startsWith("course-") ? viewCourse(h.slice(7)) : h === "projects" ? viewProjects() : h === "review" ? viewReview() : h === "setup" ? viewSetup() : viewToday();
+  const tot = totalMin(), dn = doneMin();
+  $("#s-pct").textContent = `${tot ? Math.floor(dn/tot*100) : 0}%`;
+  $("#s-bar").style.width = `${tot ? dn/tot*100 : 0}%`;
+  $("#s-hrs").textContent = `${Math.round(dn/60)} / ${Math.round(tot/60)}`;
+  $("#s-end").textContent = parse(PLAN.end).toLocaleDateString(undefined,{month:"short", year:"numeric"});
+  $("#s-streak").textContent = streak();
+  $("#trackline").textContent = S.settings.track === "core" ? "Core track: 5 NPTEL courses, one plan" : "11 NPTEL courses, one plan";
+}
+function streak(){
+  const days = new Set(Object.values(S.done)); let d = today(), n = 0;
+  if (!days.has(d)) d = addDays(d, -1);
+  while (days.has(d)) { n++; d = addDays(d, -1); }
+  return n;
+}
+function refresh(){ buildSeq(); schedule(); render(); }
+
+/* ---------- Claude ---------- */
+async function quiz(it, box){
+  const c = C.courses[it.c], final = it.kind === "final";
+  const scope = final ? c.weeks.map(w => `Week ${w.n}${w.topic ? " (" + w.topic + ")" : ""}: ${w.lectures.map(l => l[0]).join("; ")}`).join("\n") : `Week ${it.w}${c.weeks[it.w-1].topic ? " (" + c.weeks[it.w-1].topic + ")" : ""}: ${weekLectures(it.c, it.w).join("; ")}`;
+  const n = final ? 10 : 5;
+  box.innerHTML = `<p class="note">Writing ${n} questions…</p>`;
+  try {
+    const out = await sample.json(`You are an examiner for the NPTEL course "${c.title}" (${c.prof}, ${c.inst}). Write ${n} multiple-choice questions that test conceptual understanding and simple calculation for this material, at the level of the course's weekly assignments. Avoid trivia about the lecturer or course logistics.\n\nMaterial:\n${scope}\n\nReturn only JSON: {"questions":[{"q":"question text","options":["A","B","C","D"],"answer":0,"why":"one or two sentence explanation"}]} where answer is the index of the correct option. Use plain text math (e.g. V(s) = max_a sum_s' P(s'|s,a)[r + gamma V(s')]).`, {modelTier:"default"});
+    const qs = (out && out.questions || []).filter(q => q && q.q && Array.isArray(q.options) && Number.isInteger(q.answer));
+    if (!qs.length) throw {message:"no questions"};
+    let answered = 0, right = 0;
+    box.innerHTML = qs.map((q,i) => `<div class="q" data-q="${i}"><p>${i+1}. ${esc(q.q)}</p><div class="opts">${q.options.map((o,j) => `<button data-j="${j}">${esc(o)}</button>`).join("")}</div><div class="why" hidden>${esc(q.why || "")}</div></div>`).join("") + `<p class="note" data-score></p>`;
+    box.querySelectorAll(".q").forEach(qe => qe.addEventListener("click", e => {
+      const b = e.target.closest("button"); if (!b || qe.dataset.done) return;
+      const q = qs[+qe.dataset.q], j = +b.dataset.j; qe.dataset.done = 1; answered++;
+      if (j === q.answer) { right++; b.classList.add("right"); } else { b.classList.add("wrong"); qe.querySelectorAll("button")[q.answer].classList.add("right"); }
+      qe.querySelector(".why").hidden = false;
+      if (answered === qs.length) {
+        box.querySelector("[data-score]").textContent = `Score: ${right}/${qs.length}. Saved.`;
+        const t = S.tests[it.id] = Object.assign(S.tests[it.id] || {}, {quiz:{score:right, n:qs.length, date:today()}, date:today()});
+        if (!final && right/qs.length < .7) S.reviews[it.id] = {step:0, due:addDays(today(), 2)};
+        save();
+      }
+    }));
+  } catch(e) {
+    if (e && e.code === "not_granted") { sample = null; box.innerHTML = ""; return; }
+    box.innerHTML = `<p class="note">${e && e.code === "rate_limited" ? "Claude is busy right now. Try again in a minute." : "Couldn't generate a quiz this time. Try again."}</p>`;
+  }
+}
+async function ask(it, ta, out){
+  const qn = ta.value.trim(); if (!qn) return;
+  const c = it.c ? C.courses[it.c] : null, wk = c && it.w ? c.weeks[it.w-1] : null;
+  const ctx = it.kind === "lec" ? `the lecture "${it.title}" (week ${it.w}${wk.topic ? ", " + wk.topic : ""}) of the NPTEL course "${c.title}" by ${c.prof}` : it.kind === "task" ? `this practice task from week ${it.w} of "${c.title}": ${wk.task}` : `"${it.title}"`;
+  out.hidden = false; out.textContent = "Thinking…";
+  try {
+    await sample(`I'm a data engineer learning machine learning and reinforcement learning in depth. I'm working on ${ctx}.\n\nMy question: ${qn}\n\nAnswer clearly in short paragraphs. Use plain-text math where it helps and a small worked example if useful. If a coding hint helps, give a short Python snippet. Don't solve an entire assignment for me; guide me instead.`, {onText: ({text}) => { out.textContent = text; }, cache:false});
+  } catch(e) {
+    if (e && e.code === "not_granted") { sample = null; out.textContent = ""; out.hidden = true; return; }
+    out.textContent = e && e.code === "rate_limited" ? "Claude is busy right now. Try again in a minute." : "Couldn't get an answer this time. Try again.";
+  }
+}
+
+/* ---------- events ---------- */
+let noteTimer = null;
+document.addEventListener("click", e => {
+  const wb = e.target.closest("[data-week]");
+  if (wb) { const k = wb.dataset.week; openWeeks.has(k) ? openWeeks.delete(k) : openWeeks.add(k); render(); return; }
+  const a = e.target.closest("[data-act]"); if (!a) return;
+  const row = a.closest("[data-id]"), id = row && row.dataset.id, it = id && getItem(id), act = a.dataset.act;
+  if (act === "open") { open.has(id) ? open.delete(id) : open.add(id); render(); }
+  else if (act === "popen") { const k = "P:" + a.dataset.id; open.has(k) ? open.delete(k) : open.add(k); render(); }
+  else if (act === "rate") rateTest(id, +a.dataset.v);
+  else if (act === "rrate") reviewRate(id, +a.dataset.v);
+  else if (act === "quiz" && sample) quiz(it, row.querySelector('[data-out="quiz"]'));
+  else if (act === "ask" && sample) ask(it, row.querySelector("textarea[id^=ask]"), row.querySelector('[data-out="ask"]'));
+  else if (act === "export") { navigator.clipboard.writeText(JSON.stringify({s:S, n:NOTES})).then(() => { a.textContent = "Copied"; }, () => { a.textContent = "Copy blocked; select the text instead"; const tb = $("#importbox"); tb.hidden = false; $("#importtext").value = JSON.stringify({s:S, n:NOTES}); }); }
+  else if (act === "importshow") { $("#importbox").hidden = false; }
+  else if (act === "import") { try { const o = JSON.parse($("#importtext").value); if (!o.s || !o.s.done) throw 0; S = Object.assign(defaults(), o.s); S.settings = Object.assign(defaults().settings, S.settings); if (o.n) NOTES = o.n; save("s"); save("n"); refresh(); } catch(_) { $("#importmsg").textContent = "That doesn't look like a backup from this page."; } }
+});
+document.addEventListener("keydown", e => { if ((e.key === "Enter" || e.key === " ") && e.target.matches('[data-act="open"]')) { e.preventDefault(); e.target.click(); } });
+document.addEventListener("change", e => {
+  const el = e.target;
+  if (el.matches('input[data-act="done"]')) { toggleDone(el.closest("[data-id]").dataset.id, el.checked); return; }
+  if (el.closest("#setup")) {
+    const s = S.settings;
+    s.start = $("#f-start").value || s.start; s.wd = Math.max(0, +$("#f-wd").value || 0); s.we = Math.max(0, +$("#f-we").value || 0);
+    s.pace = +$("#f-pace").value; s.track = $("#f-track").value;
+    s.rest = [...document.querySelectorAll("[data-rest]")].filter(x => x.checked).map(x => +x.dataset.rest);
+    if (s.wd === 0 && s.we === 0) s.we = 60;
+    save(); refresh();
+  }
+});
+document.addEventListener("input", e => {
+  if (!e.target.matches('textarea[data-act="note"]')) return;
+  const id = e.target.closest("[data-id]").dataset.id, v = e.target.value;
+  if (v) NOTES.n[id] = v; else delete NOTES.n[id];
+  clearTimeout(noteTimer); noteTimer = setTimeout(() => save("n"), 800);
+});
+window.addEventListener("hashchange", () => { open.clear(); render(); window.scrollTo(0,0); });
+
+/* ---------- boot ---------- */
+fetch("curriculum.json").then(r => r.json()).then(data => {
+  C = data; refresh(); connect();
+  setInterval(() => { const t = today(); if (t !== window.__d) { window.__d = t; refresh(); } }, 60000); window.__d = today();
+}).catch(() => { $("#view").innerHTML = `<p class="empty">Couldn't load the curriculum file. Reload the page to try again.</p>`; });
+</script>
+</body>
+</html>
