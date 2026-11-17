@@ -19,7 +19,7 @@ A single study site for learning machine learning and reinforcement learning in 
 ## How it works
 
 - `index.html` is the whole app; `curriculum.json` holds every lecture (with its YouTube id), weekly assignments, tasks, readings, final-exam questions and projects.
-- The plan is packed into days from your daily time budget (Setup tab) and recalculates whenever you tick something off, so unfinished work rolls forward.
+- By default the plan fits everything into 12 weeks and tells you how much to cover per day; if you fall behind, the daily amount rises so you still finish on time. You can switch to a fixed daily time budget in Setup.
 - Progress and notes are saved in your browser (localStorage). Use **Setup → Copy progress backup** to move them to another device.
 - `tools/` regenerates `curriculum.json`: edit `content.py`, then run `python build.py` from that folder.
 

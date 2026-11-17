@@ -125,7 +125,8 @@ input[type=text],input[type=number],input[type=date],select{border:1px solid var
       <div class="stats">
         <div class="stat"><b id="s-pct">0%</b><span>complete</span></div>
         <div class="stat"><b id="s-hrs">0 / 0</b><span>hours done</span></div>
-        <div class="stat"><b id="s-end">—</b><span>projected finish</span></div>
+        <div class="stat"><b id="s-day">—</b><span>needed per day</span></div>
+        <div class="stat"><b id="s-end">—</b><span>finish</span></div>
         <div class="stat"><b id="s-streak">0</b><span>day streak</span></div>
       </div>
     </div>
@@ -156,9 +157,9 @@ const KIND = {lec:"Lecture", read:"Reading", assign:"Assignment", task:"Practice
 
 /* ---------- state ---------- */
 const LS_KEY = "rlstudy.v1";
-const defaults = () => ({v:1, updated:0, settings:{start:today(), wd:90, we:180, pace:1.25, rest:[], track:"full"}, done:{}, tests:{}, reviews:{}});
+const defaults = () => ({v:1, updated:0, settings:{start:today(), wd:90, we:180, pace:1.25, rest:[], track:"full", mode:"deadline", weeks:12}, done:{}, tests:{}, reviews:{}});
 let S = defaults(), NOTES = {updated:0, n:{}};
-let C = null, SEQ = [], BYID = {}, PLAN = null;
+let C = null, SEQ = [], BYID = {}, PLAN = null, DAILY = 0;
 let open = new Set();       // expanded item ids
 let openWeeks = new Set();  // expanded plan weeks
 let syncMsg = "Saved in this browser only", EMBED = false;
@@ -215,7 +216,16 @@ function habitById(id){ const m = id.match(/^H-(rev|post)-(\d{4}-\d\d-\d\d)$/); 
 const getItem = id => BYID[id] || habitById(id);
 
 /* ---------- scheduler ---------- */
-function capFor(date){ const s = S.settings; if (s.rest.includes(dow(date))) return 0; const d = dow(date); return (d === 0 || d === 6) ? s.we : s.wd; }
+function capFor(date){ const s = S.settings; if (s.rest.includes(dow(date))) return 0; if (s.mode === "deadline") return DAILY; const d = dow(date); return (d === 0 || d === 6) ? s.we : s.wd; }
+const deadline = () => addDays(S.settings.start, S.settings.weeks*7 - 1);
+function fitDeadline(){
+  const s = S.settings, t = today(), begin = s.start > t ? s.start : t, end = deadline();
+  let D = 0; for (let d = begin; d <= end; d = addDays(d, 1)) if (!s.rest.includes(dow(d))) D++;
+  const R = SEQ.filter(it => !S.done[it.id]).reduce((a,it) => a + it.min, 0) + Math.ceil(D/7)*40;
+  DAILY = Math.max(15, Math.ceil(R / Math.max(D,1) / 15) * 15);
+  schedule();
+  for (let k = 0; k < 40 && PLAN.end > end && DAILY < 1440; k++) { DAILY += 15; schedule(); }
+}
 function schedule(){
   const t = today(), s = S.settings;
   const days = new Map();
@@ -370,7 +380,7 @@ function viewToday(){
   const next = SEQ.filter(it => !S.done[it.id] && !items.includes(it)).slice(0, 5);
   const startNote = S.settings.start > t ? `<div class="notice">Your plan starts on ${fmtDate(S.settings.start)}. Change the start date in Setup.</div>` : "";
   return `${startNote}<h2>${parse(t).toLocaleDateString(undefined,{weekday:"long", day:"numeric", month:"long"})}</h2>
-    <p class="sub">${hm(planned)} planned · ${hm(done)} done${capFor(t) === 0 ? " · rest day" : ""}</p>
+    <p class="sub">${hm(planned)} planned · ${hm(done)} done${capFor(t) === 0 ? " · rest day" : ""}${S.settings.mode === "deadline" ? ` · day ${Math.floor((parse(t)-parse(S.settings.start))/864e5)+1} of ${S.settings.weeks*7}` : ""}</p>
     <div class="row-actions">${lecIds.length ? `<a class="btn primary" href="https://www.youtube.com/watch_videos?video_ids=${lecIds.join(",")}" target="_blank" rel="noopener">Play today's ${lecIds.length} lecture${lecIds.length > 1 ? "s" : ""} as one YouTube playlist ↗</a>` : ""}</div>
     ${list(items, {empty: capFor(t) === 0 ? "Rest day. Nothing scheduled." : "All caught up. Start something from Next up if you have time."})}
     ${due.length ? `<div class="section"><h3>Due for review</h3><span>Redo these self-tests from memory, then rate again</span></div><div class="list">${due.map(reviewRow).join("")}</div>` : ""}
@@ -381,13 +391,14 @@ function reviewRow(it){
   return `<div class="item" data-id="${esc(it.id)}"><div class="ihead"><span></span><div class="ititle"><div class="t">${esc(C.courses[it.c].name)}, week ${it.w}</div><div class="meta">${chip(it.c)}<span>${weekLectures(it.c,it.w).slice(0,4).map(esc).join(" · ")}${weekLectures(it.c,it.w).length > 4 ? " …" : ""}</span></div></div><div class="iacts"><span class="pill ${r.due <= today() ? "warn" : ""}">due ${fmtDay(r.due)}</span></div></div>
     <div class="detail"><div class="conf">${[1,2,3,4,5].map(v => `<button class="btn small" data-act="rrate" data-v="${v}">${v}</button>`).join("")}</div></div></div>`;
 }
-function weekKey(d){ const x = parse(d); const off = (x.getDay() + 6) % 7; x.setDate(x.getDate() - off); return ymd(x); }
+function weekKey(d){ const st = S.settings.start; if (d < st) return addDays(st, -7*Math.ceil((parse(st)-parse(d))/864e5/7)); return addDays(st, 7*Math.floor((parse(d)-parse(st))/864e5/7)); }
 function viewPlan(){
   const t = today(), weeks = new Map();
   for (const d of PLAN.keys) { const k = weekKey(d); if (!weeks.has(k)) weeks.set(k, []); weeks.get(k).push(d); }
   const cw = weekKey(t);
   if (![...openWeeks].some(k => /^\d{4}-/.test(k))) { openWeeks.add(cw); openWeeks.add(addDays(cw, 7)); }
-  let n = 0, html = `<h2>Day-by-day plan</h2><p class="sub">${PLAN.keys.length} study days · finishing around ${fmtDate(PLAN.end)}. Unfinished work rolls forward automatically, so the plan always starts from today.</p>`;
+  const dl = S.settings.mode === "deadline";
+  let n = 0, html = `<h2>Day-by-day plan</h2><p class="sub">${dl ? `Everything fits into ${S.settings.weeks} weeks at <b>${hm(DAILY)} a day</b>, finishing ${fmtDate(PLAN.end)}. If you fall behind, the daily amount goes up so you still finish by ${fmtDate(deadline())}.` : `${PLAN.keys.length} study days · finishing around ${fmtDate(PLAN.end)}. Unfinished work rolls forward automatically.`}</p>`;
   for (const [wk, ds] of weeks){
     n++;
     const items = ds.flatMap(d => PLAN.days.get(d));
@@ -396,7 +407,7 @@ function viewPlan(){
     const phase = [...new Set(items.map(it => it.phase).filter(Boolean))].join(" → ");
     const isOpen = openWeeks.has(wk);
     const status = wk < cw ? `<span class="pill good">${dn}/${items.length} done</span>` : wk === cw ? `<span class="pill warn">this week</span>` : `<span class="pill">${hm(mins)}</span>`;
-    html += `<div class="week${isOpen ? " open" : ""}"><button class="whead" data-week="${wk}" aria-expanded="${isOpen}"><div class="w1"><b>Week ${n} · ${fmtDate(wk)}</b><span>${esc(phase)}</span></div>${codes.map(chip).join(" ")}${status}</button>`;
+    html += `<div class="week${isOpen ? " open" : ""}"><button class="whead" data-week="${wk}" aria-expanded="${isOpen}"><div class="w1"><b>Week ${Math.round((parse(wk)-parse(S.settings.start))/864e5/7)+1} · ${fmtDate(wk)}</b><span>${esc(phase)}</span></div>${codes.map(chip).join(" ")}${status}</button>`;
     if (isOpen) html += `<div class="list">${ds.map(d => `<div class="day${d === t ? " today" : ""}"><span>${fmtDay(d)}${d === t ? " · today" : ""}</span><span>${hm(PLAN.days.get(d).reduce((a,it) => a + it.min, 0))}</span></div>${PLAN.days.get(d).map(it => itemRow(it)).join("")}`).join("")}</div>`;
     html += `</div>`;
   }
@@ -443,9 +454,10 @@ function viewSetup(){
   return `<h2>Setup</h2><p class="sub">Change these any time; the plan recalculates instantly and keeps everything you've completed.</p>
   <form class="form" id="setup" onsubmit="return false">
     <label for="f-start">Start date<input type="date" id="f-start" value="${s.start}"></label>
-    <label for="f-wd">Minutes per weekday<input type="number" id="f-wd" min="0" step="15" value="${s.wd}"></label>
-    <label for="f-we">Minutes per weekend day<input type="number" id="f-we" min="0" step="15" value="${s.we}"></label>
-    <label for="f-pace">Time per lecture minute (note-taking pace)<select id="f-pace">${[[1,"1.0× (just watching)"],[1.25,"1.25× (pausing for notes)"],[1.5,"1.5× (working every example)"]].map(([v,l]) => `<option value="${v}" ${s.pace == v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+    <label for="f-mode">Plan by<select id="f-mode"><option value="deadline" ${s.mode === "deadline" ? "selected" : ""}>Finish in a set number of weeks</option><option value="hours" ${s.mode !== "deadline" ? "selected" : ""}>Fixed daily time</option></select></label>
+    ${s.mode === "deadline" ? `<label for="f-weeks">Weeks to finish<input type="number" id="f-weeks" min="1" max="104" value="${s.weeks}"></label><p class="note" style="align-self:end;margin:0">Needs <b>${hm(DAILY)}</b> per study day</p>` : `<label for="f-wd">Minutes per weekday<input type="number" id="f-wd" min="0" step="15" value="${s.wd}"></label>
+    <label for="f-we">Minutes per weekend day<input type="number" id="f-we" min="0" step="15" value="${s.we}"></label>`}
+    <label for="f-pace">Time per lecture minute (note-taking pace)<select id="f-pace">${[[0.6,"0.6× (2× playback, brief notes)"],[0.8,"0.8× (1.5× playback, brief notes)"],[1,"1.0× (normal speed, no pausing)"],[1.25,"1.25× (pausing for notes)"],[1.5,"1.5× (working every example)"]].map(([v,l]) => `<option value="${v}" ${s.pace == v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
     <label for="f-track" class="full">Track<select id="f-track"><option value="full" ${s.track === "full" ? "selected" : ""}>Full: all 11 courses, 20 projects, deep-RL extension</option><option value="core" ${s.track === "core" ? "selected" : ""}>Core: Probability, Intro ML, Deep Learning, RL, Bandits + core projects</option></select></label>
     <fieldset class="full" style="border:0;padding:0;margin:0"><legend class="note">Rest days</legend><div class="days">${D.map((d,i) => `<label><input type="checkbox" data-rest="${i}" ${s.rest.includes(i) ? "checked" : ""}> ${d}</label>`).join("")}</div></fieldset>
   </form>
@@ -465,7 +477,8 @@ function render(){
   $("#s-pct").textContent = `${tot ? Math.floor(dn/tot*100) : 0}%`;
   $("#s-bar").style.width = `${tot ? dn/tot*100 : 0}%`;
   $("#s-hrs").textContent = `${Math.round(dn/60)} / ${Math.round(tot/60)}`;
-  $("#s-end").textContent = parse(PLAN.end).toLocaleDateString(undefined,{month:"short", year:"numeric"});
+  $("#s-end").textContent = parse(PLAN.end).toLocaleDateString(undefined,{day:"numeric", month:"short", year:"numeric"});
+  $("#s-day").textContent = S.settings.mode === "deadline" ? hm(DAILY) : `${hm(S.settings.wd)}/${hm(S.settings.we)}`;
   $("#s-streak").textContent = streak();
   $("#trackline").textContent = S.settings.track === "core" ? "Core track: 5 NPTEL courses, one plan" : "11 NPTEL courses, one plan";
 }
@@ -475,7 +488,7 @@ function streak(){
   while (days.has(d)) { n++; d = addDays(d, -1); }
   return n;
 }
-function refresh(){ buildSeq(); schedule(); render(); }
+function refresh(){ buildSeq(); if (S.settings.mode === "deadline") fitDeadline(); else schedule(); render(); }
 
 /* ---------- Claude ---------- */
 async function quiz(it, box){
@@ -542,7 +555,9 @@ document.addEventListener("change", e => {
   if (el.matches('input[data-act="done"]')) { toggleDone(el.closest("[data-id]").dataset.id, el.checked); return; }
   if (el.closest("#setup")) {
     const s = S.settings;
-    s.start = $("#f-start").value || s.start; s.wd = Math.max(0, +$("#f-wd").value || 0); s.we = Math.max(0, +$("#f-we").value || 0);
+    s.start = $("#f-start").value || s.start; s.mode = $("#f-mode").value;
+    if ($("#f-weeks")) s.weeks = Math.min(104, Math.max(1, Math.round(+$("#f-weeks").value || 12)));
+    if ($("#f-wd")) { s.wd = Math.max(0, +$("#f-wd").value || 0); s.we = Math.max(0, +$("#f-we").value || 0); }
     s.pace = +$("#f-pace").value; s.track = $("#f-track").value;
     s.rest = [...document.querySelectorAll("[data-rest]")].filter(x => x.checked).map(x => +x.dataset.rest);
     if (s.wd === 0 && s.we === 0) s.we = 60;
