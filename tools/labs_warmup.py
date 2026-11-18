@@ -133,7 +133,7 @@ print(totals)
 assert totals == {"HYD": 130, "BLR": 70, "MUM": 70}, f"Expected HYD 130, BLR 70, MUM 70; you have {totals}"
 ''', "Add amt"),
 S('ORDER BY total DESC',
-"`sorted(items, key=..., reverse=True)` sorts. `totals.items()` gives (key, value) pairs; `lambda kv: kv[1]` means 'sort by the value'.",
+"`sorted(items, key=..., reverse=True)` sorts. `totals.items()` gives (key, value) pairs; `lambda kv: kv[1]` means 'sort by the value'.\n\nThat `lambda` is a tiny one-line function. Don't worry about it yet: the very next lab is entirely about lambdas, starting from zero. For now, just fill in the blank.",
 '''
 ranked = sorted(totals.items(), key=lambda kv: ___, reverse=True)
 top_branch = ranked[0][0]

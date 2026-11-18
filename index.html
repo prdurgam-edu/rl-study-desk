@@ -258,7 +258,7 @@ function buildSeq(){
     if (x.kind === "project") pushProj({...x, hours:x.size});
     else { const n = Math.ceil(x.size/60); for (let k = 1; k <= n; k++) seq.push({id:`${x.id}-s${k}`, kind:"ext", x, k, n, title:x.title, min:60, phase:cur}); }
   }
-  seq.forEach(it => { if (it.kind === "task" && C.labmap[it.id]) it.lab = C.labmap[it.id]; if (it.kind === "proj" && C.labmap[it.p.id]) it.lab = C.labmap[it.p.id]; });
+  seq.forEach(it => { if (it.kind === "task" && C.labmap[it.id]) it.lab = C.labmap[it.id]; if (it.kind === "proj" && C.labmap[it.p.id]) it.lab = C.labmap[it.p.id]; if (it.kind === "proj" && C.colab[it.p.id]) it.colab = C.colab[it.p.id]; });
   SEQ = seq; BYID = {}; seq.forEach(it => BYID[it.id] = it);
 }
 const totalMin = () => SEQ.reduce((a,it) => a + it.min, 0);
@@ -387,7 +387,7 @@ function itemMeta(it){
 }
 function itemRow(it, opts = {}){
   const done = !!S.done[it.id], isOpen = open.has(it.id);
-  const labBtn = it.lab ? `<a class="btn small${it.kind === "lab" ? " primary" : ""}" href="#lab-${esc(it.lab)}">${labPassed(it.lab)}/${C.labs[it.lab].steps.length} · Open lab</a>` : "";
+  const labBtn = it.lab ? `<a class="btn small${it.kind === "lab" ? " primary" : ""}" href="#lab-${esc(it.lab)}">${labPassed(it.lab)}/${C.labs[it.lab].steps.length} · Open lab</a>` : it.colab ? `<a class="btn small" href="${esc(it.colab.url)}" target="_blank" rel="noopener">Colab notebook ↗</a>` : "";
   const watch = it.kind !== "lec" ? labBtn : EMBED ? `<button class="btn small" data-act="open">${isOpen ? "Close" : "Play"}</button>` : `<a class="btn small" href="${yt(it.yt)}" target="_blank" rel="noopener">Watch ↗</a>`;
   const when = opts.showDate && PLAN.pos[it.id] ? `<span class="pill">${fmtDay(PLAN.pos[it.id])}</span>` : "";
   return `<div class="item${done ? " done" : ""}" data-id="${esc(it.id)}">
@@ -426,7 +426,7 @@ function detail(it){
         <p class="note">Ratings of 3 or below, or a quiz score under 70%, put this week in your review queue (back in 2, then 7, then 21 days).</p>${claudeBox(it,"quiz")}`;
     }
     case "final": return `<p>Two hours, closed book. Write full answers on paper, then check them against the lectures.</p><ol>${c.finals.map(q => `<li>${esc(q)}</li>`).join("")}</ol>${claudeBox(it,"final")}${note}`;
-    case "proj": return `${it.lab ? `<p><a class="btn primary small" href="#lab-${esc(it.lab)}">Open the guided lab (${C.labs[it.lab].steps.length} steps, runs in your browser)</a></p><p class="note">Finishing the lab ticks off every session of this project.</p>` : ""}<p>${esc(it.p.desc)}</p><p><b>Deliverable:</b> ${esc(it.p.deliverable || "")}</p>${it.p.url ? `<p><a href="${esc(it.p.url)}" target="_blank" rel="noopener">Reference ↗</a></p>` : ""}<p class="note">This project is split into ${it.p.hours} one-hour sessions. Tick a session off when you've put in the hour.</p>${note}`;
+    case "proj": return `${it.lab ? `<p><a class="btn primary small" href="#lab-${esc(it.lab)}">Open the guided lab (${C.labs[it.lab].steps.length} steps, runs in your browser)</a></p><p class="note">Finishing the lab ticks off every session of this project.</p>` : ""}${it.colab ? `<p><a class="btn primary small" href="${esc(it.colab.url)}" target="_blank" rel="noopener">Open the guided notebook in Google Colab ↗</a></p><p class="note">This one needs PyTorch, so it runs in Google Colab (free; sign in with your Google account and switch on a GPU under Runtime → Change runtime type). Each step has blanks, a Check cell and a hidden solution. Tick off a session here after each hour you put in.</p>` : ""}<p>${esc(it.p.desc)}</p><p><b>Deliverable:</b> ${esc(it.p.deliverable || "")}</p>${it.p.url ? `<p><a href="${esc(it.p.url)}" target="_blank" rel="noopener">Reference ↗</a></p>` : ""}<p class="note">This project is split into ${it.p.hours} one-hour sessions. Tick a session off when you've put in the hour.</p>${note}`;
     case "ext": return `<p>${esc(it.x.desc)}</p><p><a href="${esc(it.x.url)}" target="_blank" rel="noopener">Open resource ↗</a></p>${note}`;
     case "habit": return `<p>${esc(it.title)}.</p>${note}`;
   }
@@ -571,9 +571,11 @@ function viewLab(id){
     <div class="sub" style="max-width:72ch"><p>${md(lab.intro)}</p></div>
     <div class="labhead"><div style="flex:1;min-width:200px"><div class="bar"><i id="labbar" style="width:${done/n*100}%"></i></div></div><span class="pill ${done === n ? "good" : ""}" id="labcount">${done}/${n} steps</span><span class="pystatus" id="pystatus">${PY.ready ? "Python ready" : "Python loads when you press Run (about 15 seconds the first time)"}</span><button class="btn small" data-lab-act="stop">Restart Python</button></div>
     <div id="labdone">${done === n ? labDoneMsg() : ""}</div>
+    ${C.colab[id] ? `<div class="notice">Part 2 of this week runs in Google Colab because it needs PyTorch: <a href="${esc(C.colab[id].url)}" target="_blank" rel="noopener">${esc(C.colab[id].title)} ↗</a>. Do the browser steps below first.</div>` : ""}
     ${lab.steps.map((sp, i) => `<section class="step${st.p[i] ? " passed" : ""}" data-step="${i}">
       <h3><span class="num">Step ${i+1} of ${n}</span>${esc(sp.title)}${st.p[i] ? ` <span class="pill good">passed</span>` : ""}</h3>
       <div class="text"><p>${md(sp.text)}</p></div>
+      ${/lambda/.test(sp.starter) && !id.startsWith("WL") ? `<p class="note">This step uses <code>lambda</code>. A lambda is just a one-line function. Rusty on them? The <a href="#lab-WL1">Lambda functions from zero</a> and <a href="#lab-WL2">Lambda drills</a> labs cover every pattern used here.</p>` : ""}
       <label class="note" for="code-${id}-${i}">Your code${sp.starter.includes("___") ? ". Replace each ___" : ""}</label>
       <textarea class="code" id="code-${id}-${i}" spellcheck="false" rows="${Math.min(28, (NOTES.n[codeKey(id,i)] || sp.starter).split("\n").length + 1)}">${esc(NOTES.n[codeKey(id,i)] || sp.starter)}</textarea>
       <div class="row-actions" style="margin:0"><button class="btn small" data-lab-act="run">Run</button><button class="btn small primary" data-lab-act="check">Check</button><button class="btn small" data-lab-act="hint">Hint</button><button class="btn small" data-lab-act="sol">Show solution</button><button class="btn small" data-lab-act="reset">Reset code</button></div>

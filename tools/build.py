@@ -68,16 +68,20 @@ for code, (nid, short, est, hue) in COURSES.items():
 out['projects'] = [dict(id=p[0], anchor=p[1], hours=p[2], core=p[3], title=p[4], desc=p[5], deliverable=p[6]) for p in PROJECTS]
 out['phase7'] = [dict(id=p[0], kind=p[1], size=p[2], core=p[3], title=p[4], desc=p[5], url=p[6]) for p in PHASE7]
 
-import labs_warmup, labs_p1, labs_iml
-LABS = labs_warmup.WARMUP + labs_p1.P1 + labs_p1.MC + labs_iml.IML + labs_iml.PROJ
+import labs_warmup, labs_p1, labs_iml, labs_dl, labs_rl, labs_ba, labs_lambda
+from nb_specs import NOTEBOOKS
+LABS = labs_warmup.WARMUP + labs_lambda.LAMBDA + labs_p1.P1 + labs_p1.MC + labs_iml.IML + labs_iml.PROJ + labs_dl.DL_ALL + labs_rl.RL + labs_ba.BA_ALL
 out['labs'] = {l['id']: l for l in LABS}
-out['warmup'] = [l['id'] for l in labs_warmup.WARMUP]
+out['warmup'] = ['W1', 'W2', 'WL1', 'W3', 'W4', 'W5', 'WL2', 'W6', 'W7', 'W8']
 labmap = {}
-for l in labs_p1.MC + labs_iml.IML:
-    code, n = re.match(r'([A-Z]+)(\d+)', l['id']).groups()
-    labmap[f'{code}-w{n}-t'] = l['id']
-for l in labs_p1.P1 + labs_iml.PROJ:
-    labmap[l['id']] = l['id']
+for l in LABS:
+    m = re.fullmatch(r'(MC|IML|DL|BA)(\d+)', l['id'])
+    if m:
+        labmap[f'{m.group(1)}-w{m.group(2)}-t'] = l['id']
+    elif re.fullmatch(r'P\d+', l['id']):
+        labmap[l['id']] = l['id']
+COLAB = 'https://colab.research.google.com/github/prdurgam-edu/rl-study-desk/blob/main/notebooks/'
+out['colab'] = {nb['id'].replace('NB_', ''): {'url': COLAB + nb['file'], 'title': nb['title']} for nb in NOTEBOOKS}
 out['labmap'] = labmap
 json.dump(out, open('curriculum.json', 'w'), ensure_ascii=False, separators=(',', ':'))
 tot = sum(len(w['lectures']) for c in out['courses'].values() for w in c['weeks'])
