@@ -21,6 +21,7 @@ A single study site for learning machine learning and reinforcement learning in 
 - `index.html` is the whole app; `curriculum.json` holds every lecture (with its YouTube id), weekly assignments, tasks, readings, final-exam questions and projects.
 - By default the plan fits everything into 12 weeks and tells you how much to cover per day; if you fall behind, the daily amount rises so you still finish on time. You can switch to a fixed daily time budget in Setup.
 - Progress and notes are saved in your browser (localStorage). Use **Setup → Copy progress backup** to move them to another device.
-- `tools/` regenerates `curriculum.json`: edit `content.py`, then run `python build.py` from that folder.
+- Coding exercises are guided labs that run Python in the browser (Pyodide): small steps with blanks to fill, a Check button, hints and solutions. 33 labs so far: an 8-lab Python warm-up for SQL users, then every coding task in the Foundations, Markov chain and Intro to ML stages.
+- `tools/` regenerates `curriculum.json`: edit `content.py` or the `labs_*.py` files, run `python test_labs.py labs_warmup` to check that every solution passes its check, then run `python build.py` from that folder.
 
 Lecture videos are NPTEL's, hosted on YouTube.

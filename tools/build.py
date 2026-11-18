@@ -68,6 +68,17 @@ for code, (nid, short, est, hue) in COURSES.items():
 out['projects'] = [dict(id=p[0], anchor=p[1], hours=p[2], core=p[3], title=p[4], desc=p[5], deliverable=p[6]) for p in PROJECTS]
 out['phase7'] = [dict(id=p[0], kind=p[1], size=p[2], core=p[3], title=p[4], desc=p[5], url=p[6]) for p in PHASE7]
 
+import labs_warmup, labs_p1, labs_iml
+LABS = labs_warmup.WARMUP + labs_p1.P1 + labs_p1.MC + labs_iml.IML + labs_iml.PROJ
+out['labs'] = {l['id']: l for l in LABS}
+out['warmup'] = [l['id'] for l in labs_warmup.WARMUP]
+labmap = {}
+for l in labs_p1.MC + labs_iml.IML:
+    code, n = re.match(r'([A-Z]+)(\d+)', l['id']).groups()
+    labmap[f'{code}-w{n}-t'] = l['id']
+for l in labs_p1.P1 + labs_iml.PROJ:
+    labmap[l['id']] = l['id']
+out['labmap'] = labmap
 json.dump(out, open('curriculum.json', 'w'), ensure_ascii=False, separators=(',', ':'))
 tot = sum(len(w['lectures']) for c in out['courses'].values() for w in c['weeks'])
 print('lectures', tot, 'bytes', len(json.dumps(out, separators=(',', ':'))))

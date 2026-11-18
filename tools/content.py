@@ -225,9 +225,9 @@ FINALS = {
 
 # Projects: id, anchor (course, week) or 'start'/'phase7', hours, core, title, description, deliverable
 PROJECTS = [
- ('P01', 'start', 2, True, 'Set up your ML workbench',
-  'Create a GitHub repo "ml-rl-journey" with folders per course. Set up a Python env with numpy, matplotlib, scikit-learn, PyTorch, gymnasium and jupyter. Add a NOTES.md you will update every Sunday.',
-  'Repo with environment file and a hello-world notebook that trains a tiny sklearn model.'),
+ ('P01', ('IML', 12), 2, True, 'Set up Python for deep learning',
+  'The guided labs so far ran in your browser. Deep learning needs PyTorch, which runs in Google Colab (free, nothing to install: colab.research.google.com) or on your laptop via Anaconda. Open a Colab notebook, run `import torch; print(torch.__version__)`, and save a copy to a GitHub repo called ml-rl-journey.',
+  'A Colab notebook that imports torch and trains a tiny sklearn model, saved to GitHub.'),
  ('P02', ('MF', 4), 4, False, 'Linear algebra from scratch',
   'Implement Gram-Schmidt, least squares via QR, and PCA via SVD in numpy. Compress a photo with truncated SVD at ranks 5, 20, 50 and plot the reconstruction error.',
   'Notebook with plots and a short paragraph on what SVD rank means.'),

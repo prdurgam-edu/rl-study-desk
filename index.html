@@ -112,6 +112,21 @@ input[type=text],input[type=number],input[type=date],select{border:1px solid var
 .days label{flex-direction:row;align-items:center;gap:4px;color:var(--ink)}
 .note{font-size:13px;color:var(--muted);max-width:72ch}
 .sync{font-size:12px;color:var(--muted)}
+.labhead{display:flex;flex-wrap:wrap;gap:10px 20px;align-items:center;margin:6px 0 18px}
+.pystatus{font:12.5px var(--mono);color:var(--muted)}
+.step{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:14px;display:flex;flex-direction:column;gap:10px}
+.step.passed{border-left:4px solid var(--good)}
+.step h3{display:flex;gap:10px;align-items:baseline}
+.step h3 .num{font:500 12px var(--mono);color:var(--muted)}
+.step .text p{margin:0 0 8px;max-width:72ch}
+.step .text code,.detail code{font:13px var(--mono);background:var(--bg);padding:1px 4px;border-radius:4px}
+textarea.code{font:13px/1.5 var(--mono);background:var(--bg);min-height:120px;tab-size:4;white-space:pre;overflow:auto}
+.out{font:12.5px/1.45 var(--mono);white-space:pre-wrap;background:var(--bg);border-radius:6px;padding:10px 12px;margin:0;max-height:320px;overflow:auto}
+.out.err{border-left:3px solid var(--bad)}
+.out.ok{border-left:3px solid var(--good)}
+.figs img{max-width:100%;background:#fff;border-radius:6px;border:1px solid var(--line)}
+.hint{font-size:14px;background:var(--accent-soft);border-radius:6px;padding:8px 12px}
+pre.sol{font:12.5px/1.45 var(--mono);background:var(--bg);border-radius:6px;padding:10px 12px;margin:0;overflow:auto}
 .notice{background:var(--accent-soft);border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:14px}
 @media (max-width:560px){.detail{padding-left:12px}.stats{margin-left:0}.top{align-items:flex-start}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
@@ -138,6 +153,49 @@ input[type=text],input[type=number],input[type=date],select{border:1px solid var
 </header>
 <main class="wrap" id="view"><p class="empty">Loading your curriculum…</p></main>
 
+<script type="text/plain" id="pyworker">
+importScripts("https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js");
+let py = null;
+const ready = loadPyodide().then(p => { py = p; });
+const loaded = new Set(), spaces = {};
+const HELP = `
+import os, sys
+os.environ["MPLBACKEND"] = "Agg"
+def __grab_figs():
+    if "matplotlib.pyplot" not in sys.modules:
+        return []
+    import io, base64
+    import matplotlib.pyplot as plt
+    out = []
+    for n in plt.get_fignums():
+        buf = io.BytesIO()
+        plt.figure(n).savefig(buf, format="png", dpi=80, bbox_inches="tight")
+        out.append(base64.b64encode(buf.getvalue()).decode())
+    plt.close("all")
+    return out
+`;
+onmessage = async (e) => {
+  const {id, labId, code, packages, fresh, grab} = e.data;
+  const out = [];
+  try {
+    if (!py) postMessage({id, status:"Loading Python…"});
+    await ready;
+    const need = (packages || []).filter(p => !loaded.has(p));
+    if (need.length) { postMessage({id, status:"Loading " + need.join(", ") + "…"}); await py.loadPackage(need); need.forEach(p => loaded.add(p)); }
+    if (fresh || !spaces[labId]) { if (spaces[labId]) spaces[labId].destroy(); spaces[labId] = py.globals.get("dict")(); await py.runPythonAsync(HELP, {globals: spaces[labId]}); }
+    py.setStdout({batched: s => out.push(s)}); py.setStderr({batched: s => out.push(s)});
+    postMessage({id, status:"Running…"});
+    await py.runPythonAsync(code, {globals: spaces[labId]});
+    let figs = [];
+    if (grab) { const f = await py.runPythonAsync("__grab_figs()", {globals: spaces[labId]}); figs = f.toJs(); f.destroy(); }
+    postMessage({id, ok:true, out:out.join("\n"), figs});
+  } catch (err) {
+    let figs = [];
+    try { const f = await py.runPythonAsync("__grab_figs()", {globals: spaces[labId]}); figs = f.toJs(); f.destroy(); } catch (_) {}
+    postMessage({id, ok:false, out:out.join("\n"), err:String(err && err.message || err), figs});
+  }
+};
+</script>
 <script>
 "use strict";
 /* ---------- helpers ---------- */
@@ -153,7 +211,7 @@ const fmtDay = s => parse(s).toLocaleDateString(undefined,{weekday:"short", day:
 const fmtDate = s => parse(s).toLocaleDateString(undefined,{day:"numeric", month:"short", year:"numeric"});
 const hm = m => m >= 60 ? `${Math.floor(m/60)}h${m%60 ? " "+(m%60)+"m" : ""}` : `${m}m`;
 const yt = id => `https://www.youtube.com/watch?v=${id}`;
-const KIND = {lec:"Lecture", read:"Reading", assign:"Assignment", task:"Practice", test:"Self-test", final:"Final exam", proj:"Project", ext:"Deep RL", habit:"Habit"};
+const KIND = {lec:"Lecture", read:"Reading", assign:"Assignment", task:"Practice", test:"Self-test", final:"Final exam", proj:"Project", ext:"Deep RL", habit:"Habit", lab:"Guided lab"};
 
 /* ---------- state ---------- */
 const LS_KEY = "rlstudy.v1";
@@ -174,7 +232,8 @@ function buildSeq(){
   const seq = [];
   const projs = C.projects.filter(p => (track === "full" || p.core) && (p.anchor === "start" || inTrack.has(p.anchor[0])));
   const pushProj = p => { for (let k = 1; k <= p.hours; k++) seq.push({id:`${p.id}-s${k}`, kind:"proj", p, k, title:`${p.title}`, min:60, phase:cur}); };
-  let cur = "Getting started";
+  let cur = "Python warm-up";
+  C.warmup.forEach(id => seq.push({id:`L-${id}`, kind:"lab", lab:id, title:C.labs[id].title, min:60, phase:cur}));
   projs.filter(p => p.anchor === "start").forEach(pushProj);
   for (const [pname, codes] of phases){
     cur = pname;
@@ -199,6 +258,7 @@ function buildSeq(){
     if (x.kind === "project") pushProj({...x, hours:x.size});
     else { const n = Math.ceil(x.size/60); for (let k = 1; k <= n; k++) seq.push({id:`${x.id}-s${k}`, kind:"ext", x, k, n, title:x.title, min:60, phase:cur}); }
   }
+  seq.forEach(it => { if (it.kind === "task" && C.labmap[it.id]) it.lab = C.labmap[it.id]; if (it.kind === "proj" && C.labmap[it.p.id]) it.lab = C.labmap[it.p.id]; });
   SEQ = seq; BYID = {}; seq.forEach(it => BYID[it.id] = it);
 }
 const totalMin = () => SEQ.reduce((a,it) => a + it.min, 0);
@@ -270,8 +330,8 @@ function setSync(m){ syncMsg = m; const el = $("#syncmsg"); if (el) el.textConte
 async function connect(){
   try {
     for (let k = 0; k < 30 && !(window.claude && window.claude.use); k++) await new Promise(r => setTimeout(r, 100));
-    if (!window.claude || !window.claude.use) { EMBED = true; setSync("Saved in this browser only. Use Copy progress backup to move your progress to another device."); render(); return; }
-    claude.use("sample").then(s => { sample = s; if (s) render(); }).catch(() => {});
+    if (!window.claude || !window.claude.use) { EMBED = true; setSync("Saved in this browser only. Use Copy progress backup to move your progress to another device."); softRender(); return; }
+    claude.use("sample").then(s => { sample = s; if (s) softRender(); }).catch(() => {});
     db = await claude.use("db"); const user = await claude.use("user");
     uid = user ? await user.id() : null;
     if (!db || !uid) { db = null; return; }
@@ -327,7 +387,8 @@ function itemMeta(it){
 }
 function itemRow(it, opts = {}){
   const done = !!S.done[it.id], isOpen = open.has(it.id);
-  const watch = it.kind !== "lec" ? "" : EMBED ? `<button class="btn small" data-act="open">${isOpen ? "Close" : "Play"}</button>` : `<a class="btn small" href="${yt(it.yt)}" target="_blank" rel="noopener">Watch ↗</a>`;
+  const labBtn = it.lab ? `<a class="btn small${it.kind === "lab" ? " primary" : ""}" href="#lab-${esc(it.lab)}">${labPassed(it.lab)}/${C.labs[it.lab].steps.length} · Open lab</a>` : "";
+  const watch = it.kind !== "lec" ? labBtn : EMBED ? `<button class="btn small" data-act="open">${isOpen ? "Close" : "Play"}</button>` : `<a class="btn small" href="${yt(it.yt)}" target="_blank" rel="noopener">Watch ↗</a>`;
   const when = opts.showDate && PLAN.pos[it.id] ? `<span class="pill">${fmtDay(PLAN.pos[it.id])}</span>` : "";
   return `<div class="item${done ? " done" : ""}" data-id="${esc(it.id)}">
     <div class="ihead">
@@ -354,7 +415,8 @@ function detail(it){
       <div class="row-actions" style="margin:0"><a class="btn small" href="${yt(it.yt)}" target="_blank" rel="noopener">Open on YouTube ↗</a><a class="btn small" href="${c.url}" target="_blank" rel="noopener">Course page on NPTEL ↗</a></div>${note}${claudeBox(it,"ask")}`;
     case "read": return `<p>Read <b>${esc(wk.reading.ref)}</b> in <a href="${wk.reading.url}" target="_blank" rel="noopener">${esc(wk.reading.book)}</a>. Skim first, then work through one derivation by hand.</p>${note}`;
     case "assign": return `<p>Attempt every question before checking anything. Time-box it to an hour; note what you got wrong.</p><ul>${wk.assign.map(a => `<li><a href="${esc(a[1])}" target="_blank" rel="noopener">${esc(a[0])} ↗</a></li>`).join("")}</ul>${c.resources.map(r => `<p class="note">Also available: <a href="${esc(r[1])}" target="_blank" rel="noopener">${esc(r[0])}</a></p>`).join("")}${note}`;
-    case "task": return `<p>${esc(wk.task)}</p><p class="note">Commit the notebook to your repo under <code>${esc(it.c.toLowerCase())}/week${pad(it.w)}</code>.</p>${note}${claudeBox(it,"ask")}`;
+    case "lab": return `<p>${md(C.labs[it.lab].intro)}</p><p><a class="btn primary small" href="#lab-${esc(it.lab)}">Open the guided lab (${C.labs[it.lab].steps.length} steps)</a></p>${note}`;
+    case "task": return `<p>${esc(wk.task)}</p>${it.lab ? `<p><a class="btn primary small" href="#lab-${esc(it.lab)}">Do this as a guided lab (${C.labs[it.lab].steps.length} small steps, runs in your browser)</a></p>` : `<p class="note">No guided lab for this one yet. Paste the task into a Claude chat and ask it to break the task into small steps with starter code.</p>`}<p class="note">Commit the notebook to your repo under <code>${esc(it.c.toLowerCase())}/week${pad(it.w)}</code>.</p>${note}${claudeBox(it,"ask")}`;
     case "test": {
       const t = S.tests[it.id] || {};
       return `<p>Close your notes. For each lecture below, say or write the core idea in 2–3 sentences, then rate yourself.</p>
@@ -364,7 +426,7 @@ function detail(it){
         <p class="note">Ratings of 3 or below, or a quiz score under 70%, put this week in your review queue (back in 2, then 7, then 21 days).</p>${claudeBox(it,"quiz")}`;
     }
     case "final": return `<p>Two hours, closed book. Write full answers on paper, then check them against the lectures.</p><ol>${c.finals.map(q => `<li>${esc(q)}</li>`).join("")}</ol>${claudeBox(it,"final")}${note}`;
-    case "proj": return `<p>${esc(it.p.desc)}</p><p><b>Deliverable:</b> ${esc(it.p.deliverable || "")}</p>${it.p.url ? `<p><a href="${esc(it.p.url)}" target="_blank" rel="noopener">Reference ↗</a></p>` : ""}<p class="note">This project is split into ${it.p.hours} one-hour sessions. Tick a session off when you've put in the hour.</p>${note}`;
+    case "proj": return `${it.lab ? `<p><a class="btn primary small" href="#lab-${esc(it.lab)}">Open the guided lab (${C.labs[it.lab].steps.length} steps, runs in your browser)</a></p><p class="note">Finishing the lab ticks off every session of this project.</p>` : ""}<p>${esc(it.p.desc)}</p><p><b>Deliverable:</b> ${esc(it.p.deliverable || "")}</p>${it.p.url ? `<p><a href="${esc(it.p.url)}" target="_blank" rel="noopener">Reference ↗</a></p>` : ""}<p class="note">This project is split into ${it.p.hours} one-hour sessions. Tick a session off when you've put in the hour.</p>${note}`;
     case "ext": return `<p>${esc(it.x.desc)}</p><p><a href="${esc(it.x.url)}" target="_blank" rel="noopener">Open resource ↗</a></p>${note}`;
     case "habit": return `<p>${esc(it.title)}.</p>${note}`;
   }
@@ -469,10 +531,13 @@ function viewSetup(){
 
 function render(){
   const h = (location.hash || "#today").slice(1);
-  const route = h.startsWith("course-") ? "courses" : h;
+  const route = h.startsWith("course-") ? "courses" : h.startsWith("lab-") ? "today" : h;
   document.querySelectorAll("#nav a").forEach(a => a.setAttribute("aria-current", a.getAttribute("href") === "#"+route ? "page" : "false"));
   const v = $("#view");
-  v.innerHTML = h === "plan" ? viewPlan() : h === "courses" ? viewCourses() : h.startsWith("course-") ? viewCourse(h.slice(7)) : h === "projects" ? viewProjects() : h === "review" ? viewReview() : h === "setup" ? viewSetup() : viewToday();
+  v.innerHTML = h === "plan" ? viewPlan() : h === "courses" ? viewCourses() : h.startsWith("course-") ? viewCourse(h.slice(7)) : h.startsWith("lab-") ? viewLab(h.slice(4)) : h === "projects" ? viewProjects() : h === "review" ? viewReview() : h === "setup" ? viewSetup() : viewToday();
+  updateStats();
+}
+function updateStats(){
   const tot = totalMin(), dn = doneMin();
   $("#s-pct").textContent = `${tot ? Math.floor(dn/tot*100) : 0}%`;
   $("#s-bar").style.width = `${tot ? dn/tot*100 : 0}%`;
@@ -488,7 +553,115 @@ function streak(){
   while (days.has(d)) { n++; d = addDays(d, -1); }
   return n;
 }
-function refresh(){ buildSeq(); if (S.settings.mode === "deadline") fitDeadline(); else schedule(); render(); }
+function refresh(){ buildSeq(); if (S.settings.mode === "deadline") fitDeadline(); else schedule(); softRender(); }
+function softRender(){ if (location.hash.startsWith("#lab-")) updateStats(); else render(); }
+
+/* ---------- guided labs ---------- */
+function md(t){ return esc(t).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/`([^`]+)`/g, "<code>$1</code>").split(/\n\n+/).join("</p><p>"); }
+function labState(id){ S.labs = S.labs || {}; return S.labs[id] = S.labs[id] || {p:[]}; }
+function labPassed(id){ return ((S.labs || {})[id] || {p:[]}).p.filter(Boolean).length; }
+const codeKey = (id, i) => `lab:${id}:${i}`;
+function viewLab(id){
+  const lab = C.labs[id]; if (!lab) return viewToday();
+  const st = labState(id), n = lab.steps.length, done = labPassed(id);
+  const back = SEQ.find(it => it.lab === id);
+  return `<p><a href="#today">← Today</a>${back && back.c ? ` · <a href="#course-${back.c}">${esc(C.courses[back.c].name)}</a>` : ""}</p>
+    <div class="meta">${back && back.c ? chip(back.c) : ""}<span class="kind">Guided lab</span></div>
+    <h2>${esc(lab.title)}</h2>
+    <div class="sub" style="max-width:72ch"><p>${md(lab.intro)}</p></div>
+    <div class="labhead"><div style="flex:1;min-width:200px"><div class="bar"><i id="labbar" style="width:${done/n*100}%"></i></div></div><span class="pill ${done === n ? "good" : ""}" id="labcount">${done}/${n} steps</span><span class="pystatus" id="pystatus">${PY.ready ? "Python ready" : "Python loads when you press Run (about 15 seconds the first time)"}</span><button class="btn small" data-lab-act="stop">Restart Python</button></div>
+    <div id="labdone">${done === n ? labDoneMsg() : ""}</div>
+    ${lab.steps.map((sp, i) => `<section class="step${st.p[i] ? " passed" : ""}" data-step="${i}">
+      <h3><span class="num">Step ${i+1} of ${n}</span>${esc(sp.title)}${st.p[i] ? ` <span class="pill good">passed</span>` : ""}</h3>
+      <div class="text"><p>${md(sp.text)}</p></div>
+      <label class="note" for="code-${id}-${i}">Your code${sp.starter.includes("___") ? ". Replace each ___" : ""}</label>
+      <textarea class="code" id="code-${id}-${i}" spellcheck="false" rows="${Math.min(28, (NOTES.n[codeKey(id,i)] || sp.starter).split("\n").length + 1)}">${esc(NOTES.n[codeKey(id,i)] || sp.starter)}</textarea>
+      <div class="row-actions" style="margin:0"><button class="btn small" data-lab-act="run">Run</button><button class="btn small primary" data-lab-act="check">Check</button><button class="btn small" data-lab-act="hint">Hint</button><button class="btn small" data-lab-act="sol">Show solution</button><button class="btn small" data-lab-act="reset">Reset code</button></div>
+      <div class="hint" hidden>${md(sp.hint)}</div>
+      <div class="solbox" hidden><pre class="sol">${esc(sp.solution)}</pre><div class="row-actions" style="margin:6px 0 0"><button class="btn small" data-lab-act="usesol">Put the solution in the editor</button></div></div>
+      <pre class="out" hidden></pre><div class="figs"></div>
+    </section>`).join("")}
+    <p class="note">Your code is saved as you type. Steps build on each other: when you run step 3, steps 1 and 2 run first behind the scenes.</p>`;
+}
+function labDoneMsg(){ return `<div class="notice">Lab complete. It's ticked off in your plan. Go back to <a href="#today">Today</a> for what's next.</div>`; }
+
+const PY = {
+  worker:null, ready:false, seq:0, pending:{}, at:{},
+  start(){
+    if (this.worker) return;
+    const src = document.getElementById("pyworker").textContent;
+    this.worker = new Worker(URL.createObjectURL(new Blob([src], {type:"text/javascript"})));
+    this.worker.onmessage = e => { const m = e.data, p = this.pending[m.id]; if (!p) return; if (m.status) { pyStatus(m.status); return; } delete this.pending[m.id]; this.ready = true; pyStatus("Python ready"); p(m); };
+    this.worker.onerror = e => { Object.values(this.pending).forEach(p => p({ok:false, out:"", err:"Python couldn't start: " + (e.message || "check your internet connection and press Restart Python.")})); this.pending = {}; };
+  },
+  exec(labId, code, opts = {}){
+    this.start();
+    const id = ++this.seq;
+    return new Promise(res => { this.pending[id] = res; this.worker.postMessage({id, labId, code, packages:opts.packages || [], fresh:!!opts.fresh, grab:opts.grab !== false}); });
+  },
+  restart(){ if (this.worker) this.worker.terminate(); this.worker = null; this.ready = false; this.at = {}; Object.values(this.pending).forEach(p => p({ok:false, out:"", err:"Stopped."})); this.pending = {}; pyStatus("Python restarted"); },
+  async prepare(lab, i){
+    if (this.at[lab.id] === i) return {ok:true};
+    const st = labState(lab.id);
+    const prior = lab.steps.slice(0, i).map((sp, j) => st.p[j] && NOTES.n[codeKey(lab.id, j)] ? NOTES.n[codeKey(lab.id, j)] : sp.solution).join("\n\n");
+    pyStatus(i ? `Running steps 1–${i} first…` : "Starting…");
+    let r = await this.exec(lab.id, prior || "pass", {packages:lab.packages, fresh:true, grab:true});
+    if (!r.ok && i) r = await this.exec(lab.id, lab.steps.slice(0, i).map(sp => sp.solution).join("\n\n"), {packages:lab.packages, fresh:true, grab:true});
+    if (r.ok) this.at[lab.id] = i;
+    return r;
+  }
+};
+function pyStatus(m){ const el = $("#pystatus"); if (el) el.textContent = m; }
+function friendly(err){
+  const lines = String(err || "").trim().split("\n").filter(l => l.trim());
+  let last = lines[lines.length - 1] || "Something went wrong.";
+  const ln = [...String(err).matchAll(/File "<exec>", line (\d+)/g)].pop();
+  if (/^AssertionError/.test(last)) return "Not quite yet: " + (last.replace(/^AssertionError:?\s*/, "") || "the check didn't pass.");
+  if (/^NameError/.test(last)) last += ". A variable or function is used before it's defined, or a name is misspelt.";
+  if (/^IndentationError|^SyntaxError/.test(last)) last += ". Check brackets, colons at the end of if/for/def lines, and indentation (4 spaces).";
+  return (ln ? `Line ${ln[1]}: ` : "") + last;
+}
+async function labAction(sec, act){
+  const id = location.hash.slice(5), lab = C.labs[id], i = +sec.dataset.step, sp = lab.steps[i];
+  const ta = sec.querySelector("textarea"), out = sec.querySelector(".out"), figs = sec.querySelector(".figs");
+  if (act === "hint") { sec.querySelector(".hint").hidden = false; return; }
+  if (act === "sol") { sec.querySelector(".solbox").hidden = false; return; }
+  if (act === "usesol" || act === "reset") { ta.value = act === "usesol" ? sp.solution : sp.starter; ta.rows = Math.min(28, ta.value.split("\n").length + 1); saveCode(id, i, ta.value); return; }
+  const code = ta.value;
+  if (code.includes("___")) { out.hidden = false; out.className = "out err"; out.textContent = "Replace every ___ with your own code first."; return; }
+  sec.querySelectorAll("[data-lab-act]").forEach(b => b.disabled = true);
+  out.hidden = false; out.className = "out"; out.textContent = "Running…"; figs.innerHTML = "";
+  try {
+    const pre = await PY.prepare(lab, i);
+    if (!pre.ok) { out.className = "out err"; out.textContent = "Couldn't set up the earlier steps: " + friendly(pre.err); return; }
+    const r = await PY.exec(id, code, {packages:lab.packages, grab: act !== "check"});
+    PY.at[id] = i;
+    let text = r.out || "";
+    if (!r.ok) { out.className = "out err"; out.textContent = (text ? text + "\n\n" : "") + friendly(r.err); showFigs(figs, r.figs); return; }
+    if (act === "run") { out.className = "out"; out.textContent = text || "Ran without errors. (Nothing was printed.)"; showFigs(figs, r.figs); return; }
+    const c = await PY.exec(id, sp.check, {grab:true});
+    showFigs(figs, c.figs);
+    if (!c.ok) { out.className = "out err"; out.textContent = (text ? text + "\n\n" : "") + friendly(c.err); return; }
+    PY.at[id] = i + 1;
+    out.className = "out ok"; out.textContent = (text ? text + "\n\n" : "") + "Correct. " + (i + 1 < lab.steps.length ? "On to the next step." : "That's the last step.");
+    passStep(id, i, sec);
+  } finally { sec.querySelectorAll("[data-lab-act]").forEach(b => b.disabled = false); }
+}
+function showFigs(el, figs){ el.innerHTML = (figs || []).map(b => `<img alt="Plot output" src="data:image/png;base64,${b}">`).join(""); }
+function saveCode(id, i, v){ NOTES.n[codeKey(id, i)] = v; clearTimeout(noteTimer); noteTimer = setTimeout(() => save("n"), 800); }
+function passStep(id, i, sec){
+  const st = labState(id), lab = C.labs[id];
+  NOTES.n[codeKey(id, i)] = sec.querySelector("textarea").value; save("n");
+  st.p[i] = true;
+  sec.classList.add("passed");
+  if (!sec.querySelector("h3 .pill")) sec.querySelector("h3").insertAdjacentHTML("beforeend", ` <span class="pill good">passed</span>`);
+  const done = labPassed(id), n = lab.steps.length;
+  $("#labbar").style.width = `${done/n*100}%`; $("#labcount").textContent = `${done}/${n} steps`;
+  if (done === n) { SEQ.filter(it => it.lab === id && !S.done[it.id]).forEach(it => S.done[it.id] = today()); $("#labdone").innerHTML = labDoneMsg(); }
+  save();
+  buildSeq(); if (S.settings.mode === "deadline") fitDeadline(); else schedule(); updateStats();
+  const nx = sec.nextElementSibling; if (nx && nx.classList.contains("step") && done < n) setTimeout(() => nx.scrollIntoView({behavior:"smooth", block:"start"}), 400);
+}
 
 /* ---------- Claude ---------- */
 async function quiz(it, box){
@@ -535,6 +708,8 @@ async function ask(it, ta, out){
 /* ---------- events ---------- */
 let noteTimer = null;
 document.addEventListener("click", e => {
+  const lb = e.target.closest("[data-lab-act]");
+  if (lb) { if (lb.dataset.labAct === "stop") { PY.restart(); return; } labAction(lb.closest(".step"), lb.dataset.labAct); return; }
   const wb = e.target.closest("[data-week]");
   if (wb) { const k = wb.dataset.week; openWeeks.has(k) ? openWeeks.delete(k) : openWeeks.add(k); render(); return; }
   const a = e.target.closest("[data-act]"); if (!a) return;
@@ -549,7 +724,9 @@ document.addEventListener("click", e => {
   else if (act === "importshow") { $("#importbox").hidden = false; }
   else if (act === "import") { try { const o = JSON.parse($("#importtext").value); if (!o.s || !o.s.done) throw 0; S = Object.assign(defaults(), o.s); S.settings = Object.assign(defaults().settings, S.settings); if (o.n) NOTES = o.n; save("s"); save("n"); refresh(); } catch(_) { $("#importmsg").textContent = "That doesn't look like a backup from this page."; } }
 });
-document.addEventListener("keydown", e => { if ((e.key === "Enter" || e.key === " ") && e.target.matches('[data-act="open"]')) { e.preventDefault(); e.target.click(); } });
+document.addEventListener("keydown", e => {
+  if (e.key === "Tab" && e.target.matches("textarea.code") && !e.shiftKey) { e.preventDefault(); const t = e.target, a = t.selectionStart; t.setRangeText("    ", a, t.selectionEnd, "end"); t.dispatchEvent(new Event("input", {bubbles:true})); return; }
+  if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && e.target.matches("textarea.code")) { e.preventDefault(); labAction(e.target.closest(".step"), "check"); return; } if ((e.key === "Enter" || e.key === " ") && e.target.matches('[data-act="open"]')) { e.preventDefault(); e.target.click(); } });
 document.addEventListener("change", e => {
   const el = e.target;
   if (el.matches('input[data-act="done"]')) { toggleDone(el.closest("[data-id]").dataset.id, el.checked); return; }
@@ -565,16 +742,18 @@ document.addEventListener("change", e => {
   }
 });
 document.addEventListener("input", e => {
+  if (e.target.matches("textarea.code")) { const sec = e.target.closest(".step"); saveCode(location.hash.slice(5), +sec.dataset.step, e.target.value); return; }
   if (!e.target.matches('textarea[data-act="note"]')) return;
   const id = e.target.closest("[data-id]").dataset.id, v = e.target.value;
   if (v) NOTES.n[id] = v; else delete NOTES.n[id];
   clearTimeout(noteTimer); noteTimer = setTimeout(() => save("n"), 800);
 });
 window.addEventListener("hashchange", () => { open.clear(); render(); window.scrollTo(0,0); });
+function firstRender(){ render(); }
 
 /* ---------- boot ---------- */
 fetch("curriculum.json").then(r => r.json()).then(data => {
-  C = data; refresh(); connect();
+  C = data; refresh(); if (location.hash.startsWith("#lab-")) render(); connect();
   setInterval(() => { const t = today(); if (t !== window.__d) { window.__d = t; refresh(); } }, 60000); window.__d = today();
 }).catch(() => { $("#view").innerHTML = `<p class="empty">Couldn't load the curriculum file. Reload the page to try again.</p>`; });
 </script>
