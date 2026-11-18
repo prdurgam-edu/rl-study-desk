@@ -569,7 +569,7 @@ print("Correct! Same architecture as ChatGPT's ancestors, just much smaller.")
 ]),
 
 dict(id='NB_P13', file='P13_dqn_cartpole.ipynb', title='Project: DQN from scratch on CartPole', intro=
-"Deep Q-Networks (Mnih et al., 2015) put a neural network in place of the Q-table, made stable by two tricks: a replay buffer and a target network. Build it, solve CartPole-v1 (average return 475+ out of 500), then remove each trick and see what breaks. Training takes about 10-15 minutes (a GPU doesn't help much here; CartPole is tiny).",
+"Deep Q-Networks (Mnih et al., 2015) put a neural network in place of the Q-table, made stable by two tricks: a replay buffer and a target network. Build it, get CartPole-v1 balanced (a 20-episode average above 400, out of a maximum 500), then remove each trick and see what breaks. Training takes about 10-15 minutes (a GPU doesn't help much here; CartPole is tiny).",
 setup='''
 !pip -q install gymnasium
 import os, random, collections, numpy as np, torch, torch.nn as nn, torch.nn.functional as F
